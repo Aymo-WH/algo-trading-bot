@@ -17,13 +17,8 @@ class TradingEnv(gym.Env):
             self.df = df
         else:
             if TradingEnv._data_cache is None:
-                TradingEnv._data_cache = pd.read_csv('nvda_data.csv')
+                TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
-    def __init__(self):
-        super(TradingEnv, self).__init__()
-
-        # Load data
-        self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
 
         # Define action and observation space
         # They must be gym.spaces objects
@@ -56,12 +51,18 @@ class TradingEnv(gym.Env):
         next_price = self.df.iloc[self.current_step + 1]['Close']
         price_diff = next_price - current_price
 
+        transaction_fee_percent = 0.001
+
         reward = 0.0
         if action == 2:  # Buy
             reward = price_diff
         elif action == 0:  # Sell
             reward = -price_diff
         # Hold (action 1) gives 0 reward
+
+        if action == 0 or action == 2:
+            fee = current_price * transaction_fee_percent
+            reward -= fee
 
         self.current_step += 1
 
