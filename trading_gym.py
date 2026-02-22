@@ -20,6 +20,10 @@ class TradingEnv(gym.Env):
                 TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
 
+        # Load data
+        self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
+
         # Define action and observation space
         # They must be gym.spaces objects
         # Example when using discrete actions:
@@ -47,8 +51,8 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         # Calculate reward based on the action and price change
-        current_price = self.df.iloc[self.current_step]['Close']
-        next_price = self.df.iloc[self.current_step + 1]['Close']
+        current_price = self._prices[self.current_step]
+        next_price = self._prices[self.current_step + 1]
         price_diff = next_price - current_price
 
         transaction_fee_percent = 0.001
@@ -75,8 +79,7 @@ class TradingEnv(gym.Env):
 
     def _get_observation(self):
         # Get the current observation
-        obs = self.df.iloc[self.current_step][['Close', 'RSI', 'MACD']].values
-        return obs.astype(np.float32)
+        return self.obs_matrix[self.current_step]
 
     def render(self, mode='human'):
         # Optional: Implement rendering logic
