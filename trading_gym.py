@@ -11,7 +11,7 @@ class TradingEnv(gym.Env):
         super(TradingEnv, self).__init__()
 
         # Load data
-        self.df = pd.read_csv('nvda_data.csv')
+        self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
 
         # Define action and observation space
         # They must be gym.spaces objects
