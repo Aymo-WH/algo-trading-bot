@@ -17,10 +17,8 @@ class TradingEnv(gym.Env):
             self.df = df
         else:
             if TradingEnv._data_cache is None:
-                TradingEnv._data_cache = pd.read_csv('nvda_data.csv')
+                TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
-    def __init__(self):
-        super(TradingEnv, self).__init__()
 
         # Load data
         self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
@@ -53,8 +51,8 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         # Calculate reward based on the action and price change
-        current_price = self.df.iloc[self.current_step]['Close']
-        next_price = self.df.iloc[self.current_step + 1]['Close']
+        current_price = self._prices[self.current_step]
+        next_price = self._prices[self.current_step + 1]
         price_diff = next_price - current_price
 
         reward = 0.0
