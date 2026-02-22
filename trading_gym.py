@@ -24,6 +24,7 @@ class TradingEnv(gym.Env):
 
         # Load data
         self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
 
         # Define action and observation space
         # They must be gym.spaces objects
@@ -74,8 +75,7 @@ class TradingEnv(gym.Env):
 
     def _get_observation(self):
         # Get the current observation
-        obs = self.df.iloc[self.current_step][['Close', 'RSI', 'MACD']].values
-        return obs.astype(np.float32)
+        return self.obs_matrix[self.current_step]
 
     def render(self, mode='human'):
         # Optional: Implement rendering logic
