@@ -7,6 +7,18 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
+    _data_cache = None
+
+    def __init__(self, df=None):
+        super(TradingEnv, self).__init__()
+
+        # Load data
+        if df is not None:
+            self.df = df
+        else:
+            if TradingEnv._data_cache is None:
+                TradingEnv._data_cache = pd.read_csv('nvda_data.csv')
+            self.df = TradingEnv._data_cache
     def __init__(self):
         super(TradingEnv, self).__init__()
 
