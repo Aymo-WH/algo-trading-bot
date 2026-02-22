@@ -20,9 +20,8 @@ class TradingEnv(gym.Env):
                 TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
 
-        # Load data
-        self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
+        self._prices = self.df['Close'].values
 
         # Define action and observation space
         # They must be gym.spaces objects
