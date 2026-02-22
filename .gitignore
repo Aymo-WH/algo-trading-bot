@@ -1,1 +1,4 @@
+__pycache__/
+*.csv
+.DS_Store
 nvda_data.csv
