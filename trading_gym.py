@@ -17,13 +17,11 @@ class TradingEnv(gym.Env):
             self.df = df
         else:
             if TradingEnv._data_cache is None:
-                TradingEnv._data_cache = pd.read_csv('nvda_data.csv')
+                TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
-    def __init__(self):
-        super(TradingEnv, self).__init__()
 
-        # Load data
-        self.df = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
+        self.df_len = len(self.df)
+        self.max_step_index = self.df_len - 1
 
         # Define action and observation space
         # They must be gym.spaces objects
@@ -65,7 +63,7 @@ class TradingEnv(gym.Env):
 
         self.current_step += 1
 
-        terminated = self.current_step >= len(self.df) - 1
+        terminated = self.current_step >= self.max_step_index
         truncated = False
         observation = self._get_observation()
         info = {}
