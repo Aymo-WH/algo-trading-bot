@@ -61,7 +61,7 @@ def fetch_data():
     df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
     # Save to CSV
-    output_file = 'nvda_data.csv'
+    output_file = 'data/nvda_data.csv'
     df.to_csv(output_file)
     print(f"Data saved to {output_file}")
 

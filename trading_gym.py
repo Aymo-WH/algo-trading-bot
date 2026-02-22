@@ -17,12 +17,11 @@ class TradingEnv(gym.Env):
             self.df = df
         else:
             if TradingEnv._data_cache is None:
-                TradingEnv._data_cache = pd.read_csv('nvda_data.csv').dropna().reset_index(drop=True)
+                TradingEnv._data_cache = pd.read_csv('data/nvda_data.csv').dropna().reset_index(drop=True)
             self.df = TradingEnv._data_cache
 
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
         
-        # FIX 1: Initialize the _prices array that Jules forgot!
         self._prices = self.df['Close'].values 
 
         # Define action and observation space
@@ -45,7 +44,6 @@ class TradingEnv(gym.Env):
         next_price = self._prices[self.current_step + 1]
         price_diff = next_price - current_price
 
-        # FIX 2: Add the Transaction Fee logic that Jules missed
         transaction_fee_percent = 0.001 # 0.1% fee
         fee = 0.0
         
