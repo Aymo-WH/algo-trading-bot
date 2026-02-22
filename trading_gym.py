@@ -19,6 +19,11 @@ class TradingEnv(gym.Env):
             if TradingEnv._data_cache is None:
                 TradingEnv._data_cache = pd.read_csv('nvda_data.csv')
             self.df = TradingEnv._data_cache
+    def __init__(self):
+        super(TradingEnv, self).__init__()
+
+        # Load data
+        self.df = pd.read_csv('nvda_data.csv')
 
         # Define action and observation space
         # They must be gym.spaces objects
