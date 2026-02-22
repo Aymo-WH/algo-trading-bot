@@ -70,7 +70,7 @@ class TradingEnv(gym.Env):
 
         self.current_step += 1
 
-        terminated = self.current_step >= len(self.df) - 1
+        terminated = self.current_step >= self.max_step_index
         truncated = False
         observation = self._get_observation()
         info = {}
