@@ -55,12 +55,18 @@ class TradingEnv(gym.Env):
         next_price = self._prices[self.current_step + 1]
         price_diff = next_price - current_price
 
+        transaction_fee_percent = 0.001
+
         reward = 0.0
         if action == 2:  # Buy
             reward = price_diff
         elif action == 0:  # Sell
             reward = -price_diff
         # Hold (action 1) gives 0 reward
+
+        if action == 0 or action == 2:
+            fee = current_price * transaction_fee_percent
+            reward -= fee
 
         self.current_step += 1
 
