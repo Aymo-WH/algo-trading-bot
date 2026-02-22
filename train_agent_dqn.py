@@ -11,4 +11,4 @@ model = DQN("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10000)
 
 # Save the trained model
-model.save("dqn_trading_bot")
+model.save("models/dqn_trading_bot")
