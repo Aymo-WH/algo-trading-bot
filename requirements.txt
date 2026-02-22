@@ -1,4 +1,6 @@
 yfinance
 pandas
 gymnasium
+stable-baselines3
+shimmy
 numpy
