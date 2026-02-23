@@ -32,90 +32,43 @@ def calculate_cagr(start_value, end_value, start_date, end_date):
     if end_value <= 0: return -1.0 # Total loss
     return (end_value / start_value) ** (1 / years) - 1
 
-def evaluate_model_on_stock(model, df, stock_name):
+def evaluate_model_on_stock(model, df, stock_name, is_discrete):
     # Ensure Date is datetime
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df)
+    env = TradingEnv(df=df, is_discrete=is_discrete)
     obs, _ = env.reset()
 
-    portfolio_value = INITIAL_CAPITAL
-    current_position = 1 # 0=Short, 1=Flat, 2=Long. Start Flat.
-
-    # Tracking
+    net_profit = 0.0
     trades = 0
-    fees_paid = 0.0
 
     terminated = False
     truncated = False
 
-    portfolio_values = []
-
     # Iterate through the environment
     while not (terminated or truncated):
         action, _states = model.predict(obs, deterministic=True)
-        action = int(action) # Ensure int
 
-        # Capture state before step
-        prev_step = env.current_step
+        # Estimate trades
+        if is_discrete:
+             if int(action) != 1:
+                 trades += 1
+        else:
+             if abs(float(action[0])) > 0.01:
+                 trades += 1
 
         # Take step
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        # Determine Trade Logic (Stateful)
-        # Check for position change
-        if action != current_position:
-            # We are changing position.
-            # Calculate fees for exiting old position (if any) and entering new (if any).
-
-            # Exit old position fee?
-            if current_position != 1: # Was Long or Short
-                # Closing position incurs fee
-                fee = portfolio_value * TRANSACTION_FEE
-                portfolio_value -= fee
-                fees_paid += fee
-                trades += 1 # Count as a trade (exit)
-
-            # Enter new position fee?
-            if action != 1: # Going Long or Short
-                # Opening position incurs fee
-                fee = portfolio_value * TRANSACTION_FEE
-                portfolio_value -= fee
-                fees_paid += fee
-                trades += 1 # Count as a trade (entry)
-
-            # Update Position
-            current_position = action
-
-        # Calculate Daily Return based on Position held *during* the step
-        # env.current_step is now incremented
-        curr_step = env.current_step
-
-        if curr_step < len(env._prices):
-             price_t = env._prices[prev_step]
-             price_t1 = env._prices[curr_step]
-
-             # Calculate Daily Return
-             daily_return = 0.0
-             gross_return = (price_t1 - price_t) / price_t
-
-             if current_position == 2: # Long
-                 daily_return = gross_return
-             elif current_position == 0: # Short
-                 daily_return = -gross_return
-             elif current_position == 1: # Flat
-                 daily_return = 0.0
-
-             # Update Portfolio
-             portfolio_value *= (1 + daily_return)
-             portfolio_values.append(portfolio_value)
+        # Accumulate reward
+        net_profit += reward
 
         obs = next_obs
 
     # Calculate Metrics
-    net_profit = portfolio_value - INITIAL_CAPITAL
+    portfolio_value = INITIAL_CAPITAL + net_profit
     roi = (net_profit / INITIAL_CAPITAL) * 100
 
     start_date = df['Date'].iloc[0]
@@ -128,7 +81,7 @@ def evaluate_model_on_stock(model, df, stock_name):
         "ROI": roi,
         "CAGR": cagr,
         "Trades": trades,
-        "Fees": fees_paid,
+        "Fees": 0.0,
         "Final Value": portfolio_value,
         "Start Date": start_date,
         "End Date": end_date
@@ -211,8 +164,10 @@ def main():
             # Load Data
             df = pd.read_csv(data_path)
 
+            is_discrete = "dqn" in model_name.lower()
+
             # Run Evaluation
-            metrics = evaluate_model_on_stock(model, df, stock_name)
+            metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete)
 
             # Benchmarks
             bh_roi, bh_cagr = get_buy_and_hold(df)
