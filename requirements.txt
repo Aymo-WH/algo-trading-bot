@@ -4,3 +4,4 @@ gymnasium
 stable-baselines3
 shimmy
 numpy
+pandas_ta

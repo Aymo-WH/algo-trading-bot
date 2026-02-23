@@ -12,6 +12,8 @@ class TradingEnv(gym.Env):
     def __init__(self, df=None):
         super(TradingEnv, self).__init__()
 
+        self.window_size = 10
+
         # Load data
         if df is not None:
             self.dfs = [df]
@@ -31,14 +33,18 @@ class TradingEnv(gym.Env):
             # Select a random DataFrame initially
             self.df = random.choice(self.dfs)
 
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
+        # Update obs_matrix to include new features: Close, RSI, MACD, BBL, BBM, BBU, ATR
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'BBL', 'BBM', 'BBU', 'ATR']].values.astype(np.float32)
         
         self._prices = self.df['Close'].values 
 
         # Define action and observation space
         self.action_space = spaces.Discrete(3) # 0=Sell, 1=Hold, 2=Buy
+
+        # Observation space is now a 2D Box (window_size, num_features)
+        # num_features = 7
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
         )
 
         self.current_step = 0
@@ -50,7 +56,7 @@ class TradingEnv(gym.Env):
         self.df = random.choice(self.dfs)
 
         # Rebuild observation matrix and prices for the chosen stock
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'BBL', 'BBM', 'BBU', 'ATR']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
         self.current_step = 0
@@ -59,8 +65,11 @@ class TradingEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        current_price = self._prices[self.current_step]
-        next_price = self._prices[self.current_step + 1]
+        # The decision is made based on the window ending at current_step + window_size - 1
+        decision_idx = self.current_step + self.window_size - 1
+
+        current_price = self._prices[decision_idx]
+        next_price = self._prices[decision_idx + 1]
         price_diff = next_price - current_price
 
         transaction_fee_percent = 0.001 # 0.1% fee
@@ -77,7 +86,12 @@ class TradingEnv(gym.Env):
 
         self.current_step += 1
 
-        terminated = self.current_step >= len(self.df) - 1
+        # Check if we can form the next window AND have a next price for the next step
+        # Next observation covers [current_step, current_step + window_size)
+        # Next step would need _prices[current_step + window_size] to calculate reward
+        # So we need current_step + window_size < len(self.df)
+
+        terminated = (self.current_step + self.window_size) >= len(self.df)
         truncated = False
         observation = self._get_observation()
         info = {}
@@ -85,7 +99,7 @@ class TradingEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _get_observation(self):
-        return self.obs_matrix[self.current_step]
+        return self.obs_matrix[self.current_step : self.current_step + self.window_size]
 
     def render(self, mode='human'):
         pass
