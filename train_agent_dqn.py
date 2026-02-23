@@ -2,7 +2,7 @@ from trading_gym import TradingEnv
 from stable_baselines3 import DQN
 
 # Initialize the environment
-env = TradingEnv()
+env = TradingEnv(is_discrete=True)
 
 # Initialize the DQN model
 model = DQN("MlpPolicy", env, verbose=1, target_update_interval=500)
