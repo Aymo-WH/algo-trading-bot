@@ -52,6 +52,9 @@ def fetch_data():
     start_date = '2020-01-01'
     end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
 
+    # Ensure data directory exists
+    os.makedirs('data', exist_ok=True)
+
     for ticker in tickers:
         print(f"Fetching {ticker} data from {start_date} to {end_date}...")
 
