@@ -1,10 +1,15 @@
 import yfinance as yf
 import pandas as pd
+import pandas_ta as ta
+import os
 
 def fetch_data():
     tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
     start_date = '2020-01-01'
     end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
+
+    # Ensure data directory exists
+    os.makedirs('data', exist_ok=True)
 
     for ticker in tickers:
         print(f"Fetching {ticker} data from {start_date} to {end_date}...")
@@ -60,6 +65,24 @@ def fetch_data():
 
         df['MACD'] = exp1 - exp2
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+        # Calculate Bollinger Bands
+        print(f"Calculating Bollinger Bands for {ticker}...")
+        # Standard settings: length=20, std=2
+        bb = df.ta.bbands(length=20, std=2)
+        if bb is not None:
+             # Keep only Lower, Mid, Upper. Usually first 3 columns.
+             bb = bb.iloc[:, :3]
+             bb.columns = ['BBL', 'BBM', 'BBU']
+             df = pd.concat([df, bb], axis=1)
+
+        # Calculate ATR
+        print(f"Calculating ATR for {ticker}...")
+        # ATR needs High, Low, Close. Assuming they exist. yfinance usually provides them.
+        atr = df.ta.atr(length=14)
+        if atr is not None:
+            atr.name = 'ATR'
+            df = pd.concat([df, atr], axis=1)
 
         # Drop NaN rows
         df = df.dropna()
