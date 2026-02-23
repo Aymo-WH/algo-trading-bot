@@ -1,7 +1,50 @@
 import yfinance as yf
 import pandas as pd
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import random
+import os
+
+def download_nltk_data():
+    try:
+        nltk.data.find('sentiment/vader_lexicon.zip')
+    except LookupError:
+        nltk.download('vader_lexicon')
+
+def get_mock_sentiment(sia):
+    """
+    Simulates fetching daily news headlines and returns a sentiment score.
+    """
+    headlines = [
+        "Company reports record earnings.",
+        "Market crashes due to geopolitical tensions.",
+        "New product launch is a huge success.",
+        "CEO resigns amid scandal.",
+        "Analyst upgrades stock rating.",
+        "Analyst downgrades stock rating.",
+        "Sector faces regulatory scrutiny.",
+        "Competitor announces major breakthrough.",
+        "Global economy shows signs of recovery.",
+        "Interest rates expected to rise.",
+        "Company announces stock buyback program.",
+        "Supply chain issues persist.",
+        "Quarterly revenue exceeds expectations.",
+        "Lawsuit filed against the company.",
+        "Strategic partnership announced.",
+        "Market remains flat.",
+        "Investors are cautious ahead of earnings."
+    ]
+
+    headline = random.choice(headlines)
+    score = sia.polarity_scores(headline)['compound']
+    # Add some noise to make it less discrete
+    score += random.uniform(-0.1, 0.1)
+    return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
 
 def fetch_data():
+    download_nltk_data()
+    sia = SentimentIntensityAnalyzer()
+
     tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
     start_date = '2020-01-01'
     end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
@@ -60,6 +103,11 @@ def fetch_data():
 
         df['MACD'] = exp1 - exp2
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+        # Add Simulated Sentiment
+        print(f"Calculating Simulated Sentiment for {ticker}...")
+        # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
+        df['Sentiment_Score'] = [get_mock_sentiment(sia) for _ in range(len(df))]
 
         # Drop NaN rows
         df = df.dropna()
