@@ -45,6 +45,9 @@ def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
 
+    # Ensure data directory exists
+    os.makedirs('data', exist_ok=True)
+
     tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
     start_date = '2020-01-01'
     end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
