@@ -94,11 +94,14 @@ class TradingEnv(gym.Env):
         
         transaction_fee_percent = 0.001
         
+        step_fee = 0.0
+
         if act > 0: # Buy
             # Buy shares using that percentage of self.cash
             # We interpret "percentage of self.cash" as the gross amount leaving the wallet.
             amount_to_invest = self.cash * act
             fee = amount_to_invest * transaction_fee_percent
+            step_fee = fee
             net_investment = amount_to_invest - fee
             
             if net_investment > 0:
@@ -113,6 +116,7 @@ class TradingEnv(gym.Env):
             
             gross_proceeds = shares_sold * current_price
             fee = gross_proceeds * transaction_fee_percent
+            step_fee = fee
             net_proceeds = gross_proceeds - fee
             
             self.cash += net_proceeds
@@ -136,7 +140,7 @@ class TradingEnv(gym.Env):
             terminated = True
             
         observation = self._get_observation()
-        info = {}
+        info = {'step_fee': step_fee}
 
         return observation, reward, terminated, truncated, info
 
