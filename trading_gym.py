@@ -9,9 +9,10 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None):
+    def __init__(self, df=None, is_discrete=False):
         super(TradingEnv, self).__init__()
 
+        self.is_discrete = is_discrete
         self.window_size = 10
 
         # Load data
@@ -33,18 +34,21 @@ class TradingEnv(gym.Env):
             # Select a random DataFrame initially
             self.df = random.choice(self.dfs)
 
-        # Update obs_matrix to include new features: Close, RSI, MACD, BBL, BBM, BBU, ATR
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'BBL', 'BBM', 'BBU', 'ATR']].values.astype(np.float32)
+        # Update obs_matrix to include new features: Close, RSI, MACD, Sentiment_Score
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
         
         self._prices = self.df['Close'].values 
 
         # Define action and observation space
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        if self.is_discrete:
+            self.action_space = spaces.Discrete(3)
+        else:
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
         # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 7
+        # num_features = 4
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 4), dtype=np.float32
         )
 
         self.initial_balance = 10000.0
@@ -57,7 +61,7 @@ class TradingEnv(gym.Env):
         self.df = random.choice(self.dfs)
 
         # Rebuild observation matrix and prices for the chosen stock
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'BBL', 'BBM', 'BBU', 'ATR']].values.astype(np.float32)
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
         self.current_step = 0
@@ -77,8 +81,16 @@ class TradingEnv(gym.Env):
         prev_val = self.cash + (self.shares_held * current_price)
         
         # Interpret action
-        # Action is a 1D array from Box space, e.g., [0.5]
-        act = float(action[0])
+        if self.is_discrete:
+            # Map discrete actions to percentages
+            # 0 -> -1.0 (Sell 100%)
+            # 1 -> 0.0 (Hold)
+            # 2 -> 1.0 (Buy 100%)
+            mapping = {0: -1.0, 1: 0.0, 2: 1.0}
+            act = mapping[int(action)]
+        else:
+            # Action is a 1D array from Box space, e.g., [0.5]
+            act = float(action[0])
         
         transaction_fee_percent = 0.001
         

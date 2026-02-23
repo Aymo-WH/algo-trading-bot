@@ -2,7 +2,7 @@ from trading_gym import TradingEnv
 from stable_baselines3 import PPO
 
 # Initialize the environment
-env = TradingEnv()
+env = TradingEnv(is_discrete=False)
 
 # Initialize the PPO model
 model = PPO("MlpPolicy", env, verbose=1)
