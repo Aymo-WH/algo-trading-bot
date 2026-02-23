@@ -2,23 +2,34 @@ import gymnasium as gym
 from gymnasium import spaces
 import pandas as pd
 import numpy as np
+import glob
+import random
 
 class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
-
-    _data_cache = None
 
     def __init__(self, df=None):
         super(TradingEnv, self).__init__()
 
         # Load data
         if df is not None:
+            self.dfs = [df]
             self.df = df
         else:
-            if TradingEnv._data_cache is None:
-                TradingEnv._data_cache = pd.read_csv('data/nvda_data.csv').dropna().reset_index(drop=True)
-            self.df = TradingEnv._data_cache
+            # Find all CSV files in data/ folder
+            data_files = glob.glob('data/*_data.csv')
+            if not data_files:
+                raise FileNotFoundError("No data files found in data/ directory matching pattern *_data.csv")
+
+            self.dfs = []
+            for file in data_files:
+                # Load each file
+                df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
+                self.dfs.append(df_loaded)
+
+            # Select a random DataFrame initially
+            self.df = random.choice(self.dfs)
 
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
         
@@ -34,6 +45,14 @@ class TradingEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        # Randomly select a DataFrame for the new episode
+        self.df = random.choice(self.dfs)
+
+        # Rebuild observation matrix and prices for the chosen stock
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD']].values.astype(np.float32)
+        self._prices = self.df['Close'].values
+
         self.current_step = 0
         observation = self._get_observation()
         info = {}
