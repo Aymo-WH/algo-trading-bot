@@ -1,9 +1,8 @@
 import yfinance as yf
 import pandas as pd
 import nltk
-import argparse
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-import secrets
+import random
 import os
 
 def download_nltk_data():
@@ -36,15 +35,22 @@ def get_mock_sentiment(sia):
         "Investors are cautious ahead of earnings."
     ]
 
-    headline = secrets.choice(headlines)
+    headline = random.choice(headlines)
     score = sia.polarity_scores(headline)['compound']
     # Add some noise to make it less discrete
-    score += secrets.SystemRandom().uniform(-0.1, 0.1)
+    score += random.uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
 
-def fetch_data(tickers=['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'], start_date='2020-01-01', end_date='2026-02-21'):
+def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
+
+    # Ensure data directory exists
+    os.makedirs('data', exist_ok=True)
+
+    tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
+    start_date = '2020-01-01'
+    end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
 
     # Ensure data directory exists
     os.makedirs('data', exist_ok=True)
@@ -118,11 +124,4 @@ def fetch_data(tickers=['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'], start_date='2020
         print(f"Data saved to {output_file}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch historical stock data and calculate technical indicators.")
-    parser.add_argument("--tickers", nargs="+", default=['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'], help="List of stock tickers to fetch data for.")
-    parser.add_argument("--start_date", type=str, default='2020-01-01', help="Start date for data fetching (YYYY-MM-DD).")
-    parser.add_argument("--end_date", type=str, default='2026-02-21', help="End date for data fetching (YYYY-MM-DD).")
-
-    args = parser.parse_args()
-
-    fetch_data(tickers=args.tickers, start_date=args.start_date, end_date=args.end_date)
+    fetch_data()
