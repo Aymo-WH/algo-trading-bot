@@ -9,11 +9,11 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False, window_size=90):
+    def __init__(self, df=None, is_discrete=False):
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
-        self.window_size = window_size
+        self.window_size = 10
 
         # Load data
         if df is not None:
@@ -45,10 +45,10 @@ class TradingEnv(gym.Env):
         else:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
-        # Observation space is a 1D Box (num_features,)
+        # Observation space is now a 2D Box (window_size, num_features)
         # num_features = 4
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 4), dtype=np.float32
         )
 
         self.initial_balance = 10000.0
@@ -64,8 +64,13 @@ class TradingEnv(gym.Env):
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
-        self.start_step = random.randint(0, len(self.df) - self.window_size - 1)
-        self.current_step = self.start_step
+        if options and 'start_step' in options:
+            self.current_step = options['start_step']
+        else:
+            # Generate random start step ensuring we have enough data for at least one step + window
+            max_step = len(self.df) - self.window_size - 1
+            self.current_step = random.randint(0, max_step) if max_step > 0 else 0
+
         self.cash = self.initial_balance
         self.shares_held = 0
 
@@ -75,7 +80,7 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         # The decision is made based on the window ending at current_step + window_size - 1
-        decision_idx = self.current_step
+        decision_idx = self.current_step + self.window_size - 1
         current_price = self._prices[decision_idx]
         
         # Calculate portfolio value before action
@@ -96,14 +101,11 @@ class TradingEnv(gym.Env):
         transaction_fee_percent = 0.001
         step_fee = 0.0
         
-        step_fee = 0.0
-
         if act > 0: # Buy
             # Buy shares using that percentage of self.cash
             # We interpret "percentage of self.cash" as the gross amount leaving the wallet.
             amount_to_invest = self.cash * act
             fee = amount_to_invest * transaction_fee_percent
-            step_fee = fee
             net_investment = amount_to_invest - fee
             
             if net_investment > 0:
@@ -119,7 +121,6 @@ class TradingEnv(gym.Env):
             
             gross_proceeds = shares_sold * current_price
             fee = gross_proceeds * transaction_fee_percent
-            step_fee = fee
             net_proceeds = gross_proceeds - fee
             
             self.cash += net_proceeds
@@ -129,14 +130,14 @@ class TradingEnv(gym.Env):
         self.current_step += 1
 
         # Calculate new portfolio value at the new step
-        new_decision_idx = self.current_step
+        new_decision_idx = self.current_step + self.window_size - 1
         new_price = self._prices[new_decision_idx]
         new_val = self.cash + (self.shares_held * new_price)
         
         reward = new_val - prev_val
 
         # Check termination
-        terminated = (self.current_step >= self.start_step + self.window_size)
+        terminated = (self.current_step + self.window_size) >= len(self.df)
         truncated = False
         
         # Bankruptcy check
@@ -149,7 +150,7 @@ class TradingEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _get_observation(self):
-        return self.obs_matrix[self.current_step]
+        return self.obs_matrix[self.current_step : self.current_step + self.window_size]
 
     def render(self, mode='human'):
         pass
