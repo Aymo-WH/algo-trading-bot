@@ -4,12 +4,13 @@ import pandas as pd
 import numpy as np
 import glob
 import random
+import os
 
 class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/'):
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
@@ -21,9 +22,10 @@ class TradingEnv(gym.Env):
             self.df = df
         else:
             # Find all CSV files in data/ folder
-            data_files = glob.glob('data/*_data.csv')
+            pattern = os.path.join(data_dir, '*_data.csv')
+            data_files = glob.glob(pattern)
             if not data_files:
-                raise FileNotFoundError("No data files found in data/ directory matching pattern *_data.csv")
+                raise FileNotFoundError(f"No data files found in {data_dir} directory matching pattern *_data.csv")
 
             self.dfs = []
             for file in data_files:
@@ -73,6 +75,11 @@ class TradingEnv(gym.Env):
 
         self.cash = self.initial_balance
         self.shares_held = 0
+
+        # Explicit resets requested
+        self.balance = 10000.0
+        self.net_worth = 10000.0
+        self.total_fees = 0.0
 
         observation = self._get_observation()
         info = {}
