@@ -6,6 +6,7 @@ from trading_gym import TradingEnv
 import glob
 import os
 import warnings
+import random
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -32,59 +33,83 @@ def calculate_cagr(start_value, end_value, start_date, end_date):
     if end_value <= 0: return -1.0 # Total loss
     return (end_value / start_value) ** (1 / years) - 1
 
-def evaluate_model_on_stock(model, df, stock_name, is_discrete):
+def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # Ensure Date is datetime
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete)
-    obs, _ = env.reset()
 
-    net_profit = 0.0
-    trades = 0
+    total_net_profit = 0.0
+    total_trades = 0
+    total_fees = 0.0
+    roi_list = []
+    cagr_list = []
 
-    terminated = False
-    truncated = False
+    # Iterate over the pre-defined start steps
+    for start_step in start_steps:
+        obs, _ = env.reset(options={'start_step': start_step})
 
-    # Iterate through the environment
-    while not (terminated or truncated):
-        action, _states = model.predict(obs, deterministic=True)
+        episode_profit = 0.0
+        episode_trades = 0
+        episode_fees = 0.0
 
-        # Estimate trades
-        if is_discrete:
-             if int(action) != 1:
-                 trades += 1
-        else:
-             if abs(float(action[0])) > 0.01:
-                 trades += 1
+        terminated = False
+        truncated = False
 
-        # Take step
-        next_obs, reward, terminated, truncated, info = env.step(action)
+        while not (terminated or truncated):
+            action, _states = model.predict(obs, deterministic=True)
 
-        # Accumulate reward
-        net_profit += reward
+            # Take step
+            next_obs, reward, terminated, truncated, info = env.step(action)
 
-        obs = next_obs
+            # Count trades based on fee
+            fee = info.get('step_fee', 0.0)
+            if fee > 0:
+                episode_trades += 1
+                episode_fees += fee
 
-    # Calculate Metrics
-    portfolio_value = INITIAL_CAPITAL + net_profit
-    roi = (net_profit / INITIAL_CAPITAL) * 100
+            # Accumulate reward
+            episode_profit += reward
 
-    start_date = df['Date'].iloc[0]
-    end_date = df['Date'].iloc[-1]
+            obs = next_obs
 
-    cagr = calculate_cagr(INITIAL_CAPITAL, portfolio_value, start_date, end_date) * 100
+        # Calculate Episode Metrics
+        final_value = INITIAL_CAPITAL + episode_profit
+        roi = (episode_profit / INITIAL_CAPITAL) * 100
+
+        # Calculate CAGR for this episode
+        # Start date is at start_step
+        # End date is last date of DF (as per env termination logic)
+        ep_start_date = df['Date'].iloc[start_step]
+        ep_end_date = df['Date'].iloc[-1]
+        cagr = calculate_cagr(INITIAL_CAPITAL, final_value, ep_start_date, ep_end_date) * 100
+
+        roi_list.append(roi)
+        cagr_list.append(cagr)
+        total_net_profit += episode_profit
+        total_trades += episode_trades
+        total_fees += episode_fees
+
+    # Average Metrics
+    avg_roi = np.mean(roi_list)
+    avg_cagr = np.mean(cagr_list)
 
     return {
-        "Net Profit": net_profit,
-        "ROI": roi,
-        "CAGR": cagr,
-        "Trades": trades,
-        "Fees": 0.0,
-        "Final Value": portfolio_value,
-        "Start Date": start_date,
-        "End Date": end_date
+        "Net Profit": total_net_profit, # Sum of profits across 5 runs? Or Avg? Leaderboard usually implies total if multiple runs are aggregated as one score, but mixing ROI avg and Profit sum is tricky.
+                                        # Let's verify standard practice. If "exact same 5 time windows" implies 5 tests, usually we report Average Performance.
+                                        # However, "Net Profit" is an absolute value. If I sum it, it represents profit over 5 runs.
+                                        # I'll stick to Sum for Net Profit (Total PnL) and Average for ROI/CAGR (Rate of Return).
+        "ROI": avg_roi,
+        "CAGR": avg_cagr,
+        "Trades": total_trades,         # Sum of trades
+        "Fees": total_fees,             # Sum of fees
+        "Final Value": INITIAL_CAPITAL + (total_net_profit / len(start_steps)), # This is confusing.
+                                                                                # Let's omit Final Value from return dict if not used in leaderboard,
+                                                                                # or make it Avg Final Value.
+        "Start Date": df['Date'].iloc[start_steps[0]], # Representative
+        "End Date": df['Date'].iloc[-1]
     }
 
 def get_benchmark_sp500(start_date, end_date):
@@ -157,30 +182,82 @@ def main():
             print(f"Failed to load {model_name}: {e}")
             continue
 
-        for data_path in data_files:
-            stock_name = os.path.basename(data_path).replace("_data.csv", "")
-            # print(f"  Testing on {stock_name}...")
+    # Pre-generate start steps for each stock to ensure fair comparison across models
+    stock_start_steps = {}
+    stock_dfs = {}
+    stock_sp500_benchmarks = {}
 
-            # Load Data
-            df = pd.read_csv(data_path)
+    for data_path in data_files:
+        stock_name = os.path.basename(data_path).replace("_data.csv", "")
+        df = pd.read_csv(data_path)
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'])
 
+        stock_dfs[stock_name] = df
+
+        # Generate 5 random start steps
+        # Ensure start_step fits within dataframe minus window_size
+        # Env window_size is hardcoded to 10 in trading_gym.py
+        window_size = 10
+        max_step = len(df) - window_size - 1
+
+        if max_step > 0:
+             steps = [random.randint(0, max_step) for _ in range(5)]
+        else:
+             steps = [0] * 5
+
+        stock_start_steps[stock_name] = steps
+
+        # Calculate S&P 500 Benchmark for these 5 windows
+        sp_rois = []
+        sp_cagrs = []
+        for s in steps:
+            s_date = df['Date'].iloc[s]
+            e_date = df['Date'].iloc[-1]
+
+            # Check cache
+            date_key = (s_date, e_date)
+            if date_key not in sp500_cache:
+                 sp500_cache[date_key] = get_benchmark_sp500(s_date, e_date)
+
+            r, c = sp500_cache[date_key]
+            sp_rois.append(r)
+            sp_cagrs.append(c)
+
+        stock_sp500_benchmarks[stock_name] = (np.mean(sp_rois), np.mean(sp_cagrs))
+
+
+    for model_path in model_files:
+        model_name = os.path.basename(model_path).replace(".zip", "")
+        # print(f"Evaluating Model: {model_name}")
+
+        try:
+            model = load_agent(model_path)
+        except Exception as e:
+            print(f"Failed to load {model_name}: {e}")
+            continue
+
+        for stock_name, df in stock_dfs.items():
+            start_steps = stock_start_steps[stock_name]
             is_discrete = "dqn" in model_name.lower()
 
             # Run Evaluation
-            metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete)
+            metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
 
-            # Benchmarks
-            bh_roi, bh_cagr = get_buy_and_hold(df)
+            # Benchmarks (Buy & Hold) - average over same windows?
+            # Original code did BH on full DF. But to be fair, we should average BH over the same 5 windows.
+            # However, prompt only asked for S&P 500 benchmark using exact same 5 windows.
+            # I will assume BH should also be fair.
+            bh_rois = []
+            for s in start_steps:
+                 # BH logic: (End - Start) / Start
+                 start_price = df['Close'].iloc[s]
+                 end_price = df['Close'].iloc[-1]
+                 bh_rois.append(((end_price - start_price) / start_price) * 100)
 
-            start_date = metrics["Start Date"]
-            end_date = metrics["End Date"]
+            bh_roi = np.mean(bh_rois)
 
-            # S&P 500 Benchmark
-            # Key by date tuple (use string format to be hashable if needed, or tuple)
-            date_key = (start_date, end_date)
-            if date_key not in sp500_cache:
-                sp500_cache[date_key] = get_benchmark_sp500(start_date, end_date)
-            sp500_roi, sp500_cagr = sp500_cache[date_key]
+            sp500_roi, sp500_cagr = stock_sp500_benchmarks[stock_name]
 
             results.append({
                 "Agent": model_name,
