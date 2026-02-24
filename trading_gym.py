@@ -9,11 +9,11 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False):
+    def __init__(self, df=None, is_discrete=False, window_size=90):
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
-        self.window_size = 90
+        self.window_size = window_size
 
         # Load data
         if df is not None:
