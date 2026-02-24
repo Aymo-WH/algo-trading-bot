@@ -43,6 +43,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete):
 
     net_profit = 0.0
     trades = 0
+    total_fees = 0.0
 
     terminated = False
     truncated = False
@@ -64,6 +65,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete):
 
         # Accumulate reward
         net_profit += reward
+        total_fees += info.get('step_fee', 0.0)
 
         obs = next_obs
 
@@ -81,7 +83,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete):
         "ROI": roi,
         "CAGR": cagr,
         "Trades": trades,
-        "Fees": 0.0,
+        "Fees": total_fees,
         "Final Value": portfolio_value,
         "Start Date": start_date,
         "End Date": end_date
