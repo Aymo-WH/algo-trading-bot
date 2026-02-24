@@ -94,6 +94,7 @@ class TradingEnv(gym.Env):
             act = float(action[0])
         
         transaction_fee_percent = 0.001
+        step_fee = 0.0
         
         step_fee = 0.0
 
@@ -109,6 +110,7 @@ class TradingEnv(gym.Env):
                 shares_bought = net_investment / current_price
                 self.cash -= amount_to_invest
                 self.shares_held += shares_bought
+                step_fee = fee
                 
         elif act < 0: # Sell
             # Sell that percentage of self.shares_held
@@ -122,6 +124,7 @@ class TradingEnv(gym.Env):
             
             self.cash += net_proceeds
             self.shares_held -= shares_sold
+            step_fee = fee
 
         self.current_step += 1
 
