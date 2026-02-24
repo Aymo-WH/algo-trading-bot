@@ -47,13 +47,12 @@ def fetch_data():
 
     # Ensure data directory exists
     os.makedirs('data', exist_ok=True)
+    os.makedirs('data/train', exist_ok=True)
+    os.makedirs('data/test', exist_ok=True)
 
     tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
-    start_date = '2020-01-01'
-    end_date = '2026-02-21' # Exclusive, so includes 2026-02-20
-
-    # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
+    start_date = '2018-01-01'
+    end_date = '2026-01-01'
 
     for ticker in tickers:
         print(f"Fetching {ticker} data from {start_date} to {end_date}...")
@@ -118,10 +117,22 @@ def fetch_data():
         # Drop NaN rows
         df = df.dropna()
 
-        # Save to CSV
-        output_file = f'data/{ticker}_data.csv'
-        df.to_csv(output_file)
-        print(f"Data saved to {output_file}")
+        # Split Data
+        try:
+            train_df = df.loc['2018-01-01':'2022-12-31']
+            test_df = df.loc['2023-01-01':]
+
+            # Save to CSV
+            train_file = f'data/train/{ticker}_data.csv'
+            train_df.to_csv(train_file)
+            print(f"Train data saved to {train_file}")
+
+            test_file = f'data/test/{ticker}_data.csv'
+            test_df.to_csv(test_file)
+            print(f"Test data saved to {test_file}")
+
+        except Exception as e:
+            print(f"Error splitting/saving data for {ticker}: {e}")
 
 if __name__ == "__main__":
     fetch_data()

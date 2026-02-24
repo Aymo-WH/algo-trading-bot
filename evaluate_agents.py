@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 
 # Configuration
 MODELS_DIR = "models/"
-DATA_DIR = "data/"
+DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
 TRANSACTION_FEE = 0.001 # 0.1%
 
