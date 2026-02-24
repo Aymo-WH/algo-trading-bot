@@ -3,7 +3,7 @@ import pandas as pd
 import nltk
 import argparse
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-import random
+import secrets
 import os
 
 def download_nltk_data():
@@ -36,10 +36,10 @@ def get_mock_sentiment(sia):
         "Investors are cautious ahead of earnings."
     ]
 
-    headline = random.choice(headlines)
+    headline = secrets.choice(headlines)
     score = sia.polarity_scores(headline)['compound']
     # Add some noise to make it less discrete
-    score += random.uniform(-0.1, 0.1)
+    score += secrets.SystemRandom().uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
 
 def fetch_data(tickers=['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'], start_date='2020-01-01', end_date='2026-02-21'):
