@@ -64,7 +64,13 @@ class TradingEnv(gym.Env):
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
-        self.current_step = 0
+        if options and 'start_step' in options:
+            self.current_step = options['start_step']
+        else:
+            # Generate random start step ensuring we have enough data for at least one step + window
+            max_step = len(self.df) - self.window_size - 1
+            self.current_step = random.randint(0, max_step) if max_step > 0 else 0
+
         self.cash = self.initial_balance
         self.shares_held = 0
 
@@ -93,6 +99,7 @@ class TradingEnv(gym.Env):
             act = float(action[0])
         
         transaction_fee_percent = 0.001
+        step_fee = 0.0
         
         if act > 0: # Buy
             # Buy shares using that percentage of self.cash
@@ -105,6 +112,7 @@ class TradingEnv(gym.Env):
                 shares_bought = net_investment / current_price
                 self.cash -= amount_to_invest
                 self.shares_held += shares_bought
+                step_fee = fee
                 
         elif act < 0: # Sell
             # Sell that percentage of self.shares_held
@@ -117,6 +125,7 @@ class TradingEnv(gym.Env):
             
             self.cash += net_proceeds
             self.shares_held -= shares_sold
+            step_fee = fee
 
         self.current_step += 1
 
@@ -136,7 +145,7 @@ class TradingEnv(gym.Env):
             terminated = True
             
         observation = self._get_observation()
-        info = {}
+        info = {'step_fee': step_fee}
 
         return observation, reward, terminated, truncated, info
 
