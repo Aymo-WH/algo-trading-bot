@@ -41,11 +41,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete)
 
-    total_net_profit = 0.0
-    total_trades = 0
+    net_profit = 0.0
+    trades = 0
     total_fees = 0.0
-    roi_list = []
-    cagr_list = []
 
     # Iterate over the pre-defined start steps
     for start_step in start_steps:
@@ -73,7 +71,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
             # Accumulate reward
             episode_profit += reward
 
-            obs = next_obs
+        # Accumulate reward
+        net_profit += reward
+        total_fees += info.get('step_fee', 0.0)
 
         # Calculate Episode Metrics
         final_value = INITIAL_CAPITAL + episode_profit
@@ -97,19 +97,14 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     avg_cagr = np.mean(cagr_list)
 
     return {
-        "Net Profit": total_net_profit, # Sum of profits across 5 runs? Or Avg? Leaderboard usually implies total if multiple runs are aggregated as one score, but mixing ROI avg and Profit sum is tricky.
-                                        # Let's verify standard practice. If "exact same 5 time windows" implies 5 tests, usually we report Average Performance.
-                                        # However, "Net Profit" is an absolute value. If I sum it, it represents profit over 5 runs.
-                                        # I'll stick to Sum for Net Profit (Total PnL) and Average for ROI/CAGR (Rate of Return).
-        "ROI": avg_roi,
-        "CAGR": avg_cagr,
-        "Trades": total_trades,         # Sum of trades
-        "Fees": total_fees,             # Sum of fees
-        "Final Value": INITIAL_CAPITAL + (total_net_profit / len(start_steps)), # This is confusing.
-                                                                                # Let's omit Final Value from return dict if not used in leaderboard,
-                                                                                # or make it Avg Final Value.
-        "Start Date": df['Date'].iloc[start_steps[0]], # Representative
-        "End Date": df['Date'].iloc[-1]
+        "Net Profit": net_profit,
+        "ROI": roi,
+        "CAGR": cagr,
+        "Trades": trades,
+        "Fees": total_fees,
+        "Final Value": portfolio_value,
+        "Start Date": start_date,
+        "End Date": end_date
     }
 
 def get_benchmark_sp500(start_date, end_date):
