@@ -13,7 +13,7 @@ class TradingEnv(gym.Env):
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
-        self.window_size = 10
+        self.window_size = 90
 
         # Load data
         if df is not None:
@@ -45,10 +45,10 @@ class TradingEnv(gym.Env):
         else:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
-        # Observation space is now a 2D Box (window_size, num_features)
+        # Observation space is a 1D Box (num_features,)
         # num_features = 4
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 4), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
         )
 
         self.initial_balance = 10000.0
@@ -64,7 +64,8 @@ class TradingEnv(gym.Env):
         self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
-        self.current_step = 0
+        self.start_step = random.randint(0, len(self.df) - self.window_size - 1)
+        self.current_step = self.start_step
         self.cash = self.initial_balance
         self.shares_held = 0
 
@@ -74,7 +75,7 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         # The decision is made based on the window ending at current_step + window_size - 1
-        decision_idx = self.current_step + self.window_size - 1
+        decision_idx = self.current_step
         current_price = self._prices[decision_idx]
         
         # Calculate portfolio value before action
@@ -125,14 +126,14 @@ class TradingEnv(gym.Env):
         self.current_step += 1
 
         # Calculate new portfolio value at the new step
-        new_decision_idx = self.current_step + self.window_size - 1
+        new_decision_idx = self.current_step
         new_price = self._prices[new_decision_idx]
         new_val = self.cash + (self.shares_held * new_price)
         
         reward = new_val - prev_val
 
         # Check termination
-        terminated = (self.current_step + self.window_size) >= len(self.df)
+        terminated = (self.current_step >= self.start_step + self.window_size)
         truncated = False
         
         # Bankruptcy check
@@ -145,7 +146,7 @@ class TradingEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _get_observation(self):
-        return self.obs_matrix[self.current_step : self.current_step + self.window_size]
+        return self.obs_matrix[self.current_step]
 
     def render(self, mode='human'):
         pass
