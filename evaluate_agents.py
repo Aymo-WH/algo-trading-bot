@@ -41,9 +41,11 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete)
 
-    net_profit = 0.0
-    trades = 0
-    total_fees = 0.0
+    roi_list = []
+    cagr_list = []
+    profit_list = []
+    trades_list = []
+    fees_list = []
 
     # Iterate over the pre-defined start steps
     for start_step in start_steps:
@@ -71,9 +73,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
             # Accumulate reward
             episode_profit += reward
 
-        # Accumulate reward
-        net_profit += reward
-        total_fees += info.get('step_fee', 0.0)
+            obs = next_obs
 
         # Calculate Episode Metrics
         final_value = INITIAL_CAPITAL + episode_profit
@@ -88,23 +88,25 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
         roi_list.append(roi)
         cagr_list.append(cagr)
-        total_net_profit += episode_profit
-        total_trades += episode_trades
-        total_fees += episode_fees
+        profit_list.append(episode_profit)
+        trades_list.append(episode_trades)
+        fees_list.append(episode_fees)
 
     # Average Metrics
     avg_roi = np.mean(roi_list)
     avg_cagr = np.mean(cagr_list)
+    total_net_profit = np.sum(profit_list)
+    total_trades = np.sum(trades_list)
+    total_fees = np.sum(fees_list)
 
     return {
-        "Net Profit": net_profit,
-        "ROI": roi,
-        "CAGR": cagr,
-        "Trades": trades,
+        "Net Profit": total_net_profit,
+        "ROI": avg_roi,
+        "CAGR": avg_cagr,
+        "Trades": total_trades,
         "Fees": total_fees,
-        "Final Value": portfolio_value,
-        "Start Date": start_date,
-        "End Date": end_date
+        "Start Date": df['Date'].iloc[start_steps[0]], # Representative
+        "End Date": df['Date'].iloc[-1]
     }
 
 def get_benchmark_sp500(start_date, end_date):
@@ -166,16 +168,6 @@ def main():
 
     results = []
     sp500_cache = {}
-
-    for model_path in model_files:
-        model_name = os.path.basename(model_path).replace(".zip", "")
-        # print(f"Evaluating Model: {model_name}")
-
-        try:
-            model = load_agent(model_path)
-        except Exception as e:
-            print(f"Failed to load {model_name}: {e}")
-            continue
 
     # Pre-generate start steps for each stock to ensure fair comparison across models
     stock_start_steps = {}
