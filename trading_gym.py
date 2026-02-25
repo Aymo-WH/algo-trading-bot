@@ -10,10 +10,19 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/'):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=0.001):
+        """
+        Initialize the Trading Environment.
+
+        :param df: Pandas DataFrame containing historical data. If None, loads from data_dir.
+        :param is_discrete: Boolean flag for discrete action space (True) or continuous (False).
+        :param data_dir: Directory path to load data from if df is None.
+        :param transaction_fee_percent: Transaction fee as a percentage of trade value (default 0.001 = 0.1%).
+        """
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
+        self.transaction_fee_percent = transaction_fee_percent
         self.window_size = 10
 
         # Load data
@@ -107,14 +116,13 @@ class TradingEnv(gym.Env):
             # Action is a 1D array from Box space, e.g., [0.5]
             act = float(action[0])
         
-        transaction_fee_percent = 0.001
         step_fee = 0.0
         
         if act > 0: # Buy
             # Buy shares using that percentage of self.cash
             # We interpret "percentage of self.cash" as the gross amount leaving the wallet.
             amount_to_invest = self.cash * act
-            fee = amount_to_invest * transaction_fee_percent
+            fee = amount_to_invest * self.transaction_fee_percent
             net_investment = amount_to_invest - fee
             
             if net_investment > 0:
@@ -129,7 +137,7 @@ class TradingEnv(gym.Env):
             shares_sold = self.shares_held * fraction
             
             gross_proceeds = shares_sold * current_price
-            fee = gross_proceeds * transaction_fee_percent
+            fee = gross_proceeds * self.transaction_fee_percent
             net_proceeds = gross_proceeds - fee
             
             self.cash += net_proceeds
