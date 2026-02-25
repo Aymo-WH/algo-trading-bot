@@ -15,7 +15,6 @@ warnings.filterwarnings("ignore")
 MODELS_DIR = "models/"
 DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
-TRANSACTION_FEE = 0.001 # 0.1%
 
 def load_agent(model_path):
     if "ppo" in model_path.lower():
