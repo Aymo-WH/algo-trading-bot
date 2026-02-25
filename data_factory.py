@@ -46,7 +46,6 @@ def fetch_data():
     sia = SentimentIntensityAnalyzer()
 
     # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
 
