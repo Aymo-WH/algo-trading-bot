@@ -4,6 +4,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
+from utils import flatten_multiindex_columns
 
 def download_nltk_data():
     try:
@@ -69,14 +70,7 @@ def fetch_data():
             continue
 
         # Check if MultiIndex columns (common in new yfinance)
-        if isinstance(df.columns, pd.MultiIndex):
-            # We assume the first level is Price and second is Ticker
-            # We can drop the Ticker level if it's just one ticker
-            try:
-                df.columns = df.columns.droplevel(1)
-            except Exception as e:
-                print(f"Warning: Could not drop level from MultiIndex columns for {ticker}: {e}")
-                pass
+        df = flatten_multiindex_columns(df)
 
         # Ensure 'Close' column exists
         if 'Close' not in df.columns:
