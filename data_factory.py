@@ -109,6 +109,21 @@ def fetch_data():
         df['MACD'] = exp1 - exp2
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
+        # Calculate Bollinger Bands (20-day)
+        print(f"Calculating Bollinger Bands for {ticker}...")
+        sma_20 = df['Close'].rolling(window=20).mean()
+        std_20 = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = sma_20 + 2 * std_20
+        df['BB_Lower'] = sma_20 - 2 * std_20
+
+        # Calculate ATR (14-day)
+        print(f"Calculating ATR for {ticker}...")
+        high_low = df['High'] - df['Low']
+        high_close = (df['High'] - df['Close'].shift()).abs()
+        low_close = (df['Low'] - df['Close'].shift()).abs()
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        df['ATR'] = tr.rolling(window=14).mean()
+
         # Add Simulated Sentiment
         print(f"Calculating Simulated Sentiment for {ticker}...")
         # Generating sentiment for all rows including those that might have NaNs (which are dropped later)

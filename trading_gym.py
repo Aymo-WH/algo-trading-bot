@@ -36,21 +36,21 @@ class TradingEnv(gym.Env):
             # Select a random DataFrame initially
             self.df = random.choice(self.dfs)
 
-        # Update obs_matrix to include new features: Close, RSI, MACD, Sentiment_Score
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
+        # Update obs_matrix to include new features: Close, RSI, MACD, Sentiment_Score, BB_Upper, BB_Lower, ATR
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
         
         self._prices = self.df['Close'].values 
 
         # Define action and observation space
         if self.is_discrete:
-            self.action_space = spaces.Discrete(3)
+            self.action_space = spaces.Discrete(5)
         else:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
         # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 4
+        # num_features = 7
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 4), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
         )
 
         self.initial_balance = 10000.0
@@ -63,7 +63,7 @@ class TradingEnv(gym.Env):
         self.df = random.choice(self.dfs)
 
         # Rebuild observation matrix and prices for the chosen stock
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score']].values.astype(np.float32)
+        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
         self._prices = self.df['Close'].values
 
         if options and 'start_step' in options:
@@ -97,9 +97,11 @@ class TradingEnv(gym.Env):
         if self.is_discrete:
             # Map discrete actions to percentages
             # 0 -> -1.0 (Sell 100%)
-            # 1 -> 0.0 (Hold)
-            # 2 -> 1.0 (Buy 100%)
-            mapping = {0: -1.0, 1: 0.0, 2: 1.0}
+            # 1 -> -0.5 (Sell 50%)
+            # 2 -> 0.0 (Hold)
+            # 3 -> 0.5 (Buy 50%)
+            # 4 -> 1.0 (Buy 100%)
+            mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
             act = mapping[int(action)]
         else:
             # Action is a 1D array from Box space, e.g., [0.5]
