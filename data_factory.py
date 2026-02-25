@@ -54,14 +54,28 @@ def fetch_data():
     start_date = '2018-01-01'
     end_date = '2026-01-01'
 
-    for ticker in tickers:
-        print(f"Fetching {ticker} data from {start_date} to {end_date}...")
+    # Fetch data for all tickers
+    print(f"Fetching data for all tickers from {start_date} to {end_date}...")
+    try:
+        all_data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return
 
-        # Fetch data
+    for ticker in tickers:
+        print(f"Processing {ticker} data...")
+
+        # Extract data for the specific ticker
         try:
-            df = yf.download(ticker, start=start_date, end=end_date)
-        except Exception as e:
-            print(f"Error fetching data for {ticker}: {e}")
+            if isinstance(all_data.columns, pd.MultiIndex):
+                df = all_data[ticker].copy()
+            elif len(tickers) == 1:
+                df = all_data.copy()
+            else:
+                print(f"Unexpected data format for {ticker}")
+                continue
+        except KeyError:
+            print(f"No data found for {ticker}.")
             continue
 
         if df.empty:
@@ -69,6 +83,7 @@ def fetch_data():
             continue
 
         # Check if MultiIndex columns (common in new yfinance)
+        # With group_by='ticker', df[ticker] usually returns single level columns
         if isinstance(df.columns, pd.MultiIndex):
             # We assume the first level is Price and second is Ticker
             # We can drop the Ticker level if it's just one ticker
