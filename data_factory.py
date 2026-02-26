@@ -1,5 +1,6 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
@@ -14,38 +15,54 @@ def load_config():
     except FileNotFoundError:
         return {}
 
+MOCK_HEADLINES = [
+    "Company reports record earnings.",
+    "Market crashes due to geopolitical tensions.",
+    "New product launch is a huge success.",
+    "CEO resigns amid scandal.",
+    "Analyst upgrades stock rating.",
+    "Analyst downgrades stock rating.",
+    "Sector faces regulatory scrutiny.",
+    "Competitor announces major breakthrough.",
+    "Global economy shows signs of recovery.",
+    "Interest rates expected to rise.",
+    "Company announces stock buyback program.",
+    "Supply chain issues persist.",
+    "Quarterly revenue exceeds expectations.",
+    "Lawsuit filed against the company.",
+    "Strategic partnership announced.",
+    "Market remains flat.",
+    "Investors are cautious ahead of earnings."
+]
+_MOCK_HEADLINE_SCORES = None
+
 def download_nltk_data():
     try:
         nltk.data.find('sentiment/vader_lexicon.zip')
     except LookupError:
         nltk.download('vader_lexicon')
 
+def _get_cached_scores(sia):
+    global _MOCK_HEADLINE_SCORES
+    if _MOCK_HEADLINE_SCORES is None:
+        _MOCK_HEADLINE_SCORES = np.array([sia.polarity_scores(h)['compound'] for h in MOCK_HEADLINES])
+    return _MOCK_HEADLINE_SCORES
+
+def get_mock_sentiment_batch(n, sia):
+    scores = _get_cached_scores(sia)
+
+    # Vectorized sampling
+    selected_scores = np.random.choice(scores, size=n)
+    noise = np.random.uniform(-0.1, 0.1, size=n)
+    final_scores = selected_scores + noise
+    return np.clip(final_scores, -1.0, 1.0)
+
 def get_mock_sentiment(sia):
     """
     Simulates fetching daily news headlines and returns a sentiment score.
     """
-    headlines = [
-        "Company reports record earnings.",
-        "Market crashes due to geopolitical tensions.",
-        "New product launch is a huge success.",
-        "CEO resigns amid scandal.",
-        "Analyst upgrades stock rating.",
-        "Analyst downgrades stock rating.",
-        "Sector faces regulatory scrutiny.",
-        "Competitor announces major breakthrough.",
-        "Global economy shows signs of recovery.",
-        "Interest rates expected to rise.",
-        "Company announces stock buyback program.",
-        "Supply chain issues persist.",
-        "Quarterly revenue exceeds expectations.",
-        "Lawsuit filed against the company.",
-        "Strategic partnership announced.",
-        "Market remains flat.",
-        "Investors are cautious ahead of earnings."
-    ]
-
-    headline = random.choice(headlines)
-    score = sia.polarity_scores(headline)['compound']
+    scores = _get_cached_scores(sia)
+    score = np.random.choice(scores)
     # Add some noise to make it less discrete
     score += random.uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
@@ -150,7 +167,7 @@ def fetch_data():
         # Add Simulated Sentiment
         print(f"Calculating Simulated Sentiment for {ticker}...")
         # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
-        df['Sentiment_Score'] = [get_mock_sentiment(sia) for _ in range(len(df))]
+        df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
 
         # Drop NaN rows
         df = df.dropna()
