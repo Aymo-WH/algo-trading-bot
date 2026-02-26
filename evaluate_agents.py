@@ -59,7 +59,13 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         truncated = False
 
         while not (terminated or truncated):
-            action, _states = model.predict(obs, deterministic=True)
+            # Handle potential observation shape mismatch (e.g., model trained on fewer features)
+            # The current environment might have more features (7) than legacy models (4)
+            obs_for_prediction = obs
+            if model.observation_space.shape[-1] < obs.shape[-1]:
+                obs_for_prediction = obs[..., :model.observation_space.shape[-1]]
+
+            action, _states = model.predict(obs_for_prediction, deterministic=True)
 
             # Take step
             next_obs, reward, terminated, truncated, info = env.step(action)
