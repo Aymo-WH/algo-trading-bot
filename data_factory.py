@@ -1,9 +1,40 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
+import json
+
+def load_config():
+    """Loads configuration from config.json, returns empty dict if not found."""
+    try:
+        with open('config.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+MOCK_HEADLINES = [
+    "Company reports record earnings.",
+    "Market crashes due to geopolitical tensions.",
+    "New product launch is a huge success.",
+    "CEO resigns amid scandal.",
+    "Analyst upgrades stock rating.",
+    "Analyst downgrades stock rating.",
+    "Sector faces regulatory scrutiny.",
+    "Competitor announces major breakthrough.",
+    "Global economy shows signs of recovery.",
+    "Interest rates expected to rise.",
+    "Company announces stock buyback program.",
+    "Supply chain issues persist.",
+    "Quarterly revenue exceeds expectations.",
+    "Lawsuit filed against the company.",
+    "Strategic partnership announced.",
+    "Market remains flat.",
+    "Investors are cautious ahead of earnings."
+]
+_MOCK_HEADLINE_SCORES = None
 
 def download_nltk_data():
     try:
@@ -11,32 +42,27 @@ def download_nltk_data():
     except LookupError:
         nltk.download('vader_lexicon')
 
+def _get_cached_scores(sia):
+    global _MOCK_HEADLINE_SCORES
+    if _MOCK_HEADLINE_SCORES is None:
+        _MOCK_HEADLINE_SCORES = np.array([sia.polarity_scores(h)['compound'] for h in MOCK_HEADLINES])
+    return _MOCK_HEADLINE_SCORES
+
+def get_mock_sentiment_batch(n, sia):
+    scores = _get_cached_scores(sia)
+
+    # Vectorized sampling
+    selected_scores = np.random.choice(scores, size=n)
+    noise = np.random.uniform(-0.1, 0.1, size=n)
+    final_scores = selected_scores + noise
+    return np.clip(final_scores, -1.0, 1.0)
+
 def get_mock_sentiment(sia):
     """
     Simulates fetching daily news headlines and returns a sentiment score.
     """
-    headlines = [
-        "Company reports record earnings.",
-        "Market crashes due to geopolitical tensions.",
-        "New product launch is a huge success.",
-        "CEO resigns amid scandal.",
-        "Analyst upgrades stock rating.",
-        "Analyst downgrades stock rating.",
-        "Sector faces regulatory scrutiny.",
-        "Competitor announces major breakthrough.",
-        "Global economy shows signs of recovery.",
-        "Interest rates expected to rise.",
-        "Company announces stock buyback program.",
-        "Supply chain issues persist.",
-        "Quarterly revenue exceeds expectations.",
-        "Lawsuit filed against the company.",
-        "Strategic partnership announced.",
-        "Market remains flat.",
-        "Investors are cautious ahead of earnings."
-    ]
-
-    headline = random.choice(headlines)
-    score = sia.polarity_scores(headline)['compound']
+    scores = _get_cached_scores(sia)
+    score = np.random.choice(scores)
     # Add some noise to make it less discrete
     score += random.uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
@@ -45,14 +71,29 @@ def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
 
+    # Load configuration
+    config = load_config()
+
     # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
 
-    tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
-    start_date = '2018-01-01'
-    end_date = '2026-01-01'
+    # Use configuration with fallbacks
+    tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
+    start_date = config.get('start_date', '2018-01-01')
+    end_date = config.get('end_date', '2026-01-01')
+
+    train_start_date = config.get('train_start_date', '2018-01-01')
+    train_end_date = config.get('train_end_date', '2022-12-31')
+    test_start_date = config.get('test_start_date', '2023-01-01')
+
+    print(f"Fetching data for {tickers} from {start_date} to {end_date}...")
+    try:
+        # Fetch data for all tickers at once
+        data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return
 
     # Fetch data for all tickers
     print(f"Fetching data for all tickers from {start_date} to {end_date}...")
@@ -63,27 +104,22 @@ def fetch_data():
         return
 
     for ticker in tickers:
-        print(f"Processing {ticker} data...")
+        print(f"Processing {ticker}...")
 
-        # Extract data for the specific ticker
         try:
-            if isinstance(all_data.columns, pd.MultiIndex):
-                # Check if the top level contains the ticker
-                if ticker in all_data.columns.levels[0]:
-                    df = all_data[ticker].copy()
-                else:
-                    print(f"No data found for {ticker} in download results.")
+            # Extract dataframe for specific ticker
+            if isinstance(data.columns, pd.MultiIndex):
+                try:
+                    df = data[ticker].copy()
+                except KeyError:
+                    print(f"No data found for {ticker} in bulk download.")
                     continue
             else:
-                # If single index, it means only one ticker was requested or returned
-                # We assume this DataFrame corresponds to the single ticker if len(tickers) == 1
-                if len(tickers) == 1:
-                    df = all_data.copy()
-                else:
-                    print(f"Unexpected data format for {ticker}: Single index returned for multiple tickers.")
-                    continue
-        except KeyError:
-            print(f"No data found for {ticker}.")
+                # Fallback if only one ticker or flat structure returned
+                df = data.copy()
+
+        except Exception as e:
+            print(f"Error extracting data for {ticker}: {e}")
             continue
         except Exception as e:
              print(f"Error extracting data for {ticker}: {e}")
@@ -92,18 +128,6 @@ def fetch_data():
         if df.empty:
             print(f"No data fetched for {ticker}.")
             continue
-
-        # Check if MultiIndex columns (common in new yfinance)
-        # With group_by='ticker', df[ticker] usually returns single level columns
-        # However, to be safe and consistent with previous logic:
-        if isinstance(df.columns, pd.MultiIndex):
-            # We assume the first level is Price and second is Ticker
-            # We can drop the Ticker level if it's just one ticker
-            try:
-                df.columns = df.columns.droplevel(1)
-            except Exception as e:
-                print(f"Warning: Could not drop level from MultiIndex columns for {ticker}: {e}")
-                pass
 
         # Ensure 'Close' column exists
         if 'Close' not in df.columns:
@@ -154,15 +178,17 @@ def fetch_data():
         # Add Simulated Sentiment
         print(f"Calculating Simulated Sentiment for {ticker}...")
         # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
-        df['Sentiment_Score'] = [get_mock_sentiment(sia) for _ in range(len(df))]
+        df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
 
         # Drop NaN rows
         df = df.dropna()
 
         # Split Data
         try:
-            train_df = df.loc['2018-01-01':'2022-12-31']
-            test_df = df.loc['2023-01-01':]
+            # Slicing with .loc using strings works if the index is DatetimeIndex or strings.
+            # yfinance returns DatetimeIndex, so string slicing is supported.
+            train_df = df.loc[train_start_date:train_end_date]
+            test_df = df.loc[test_start_date:]
 
             # Save to CSV
             train_file = f'data/train/{ticker}_data.csv'

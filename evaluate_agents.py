@@ -7,6 +7,7 @@ import glob
 import os
 import warnings
 import random
+from utils import flatten_multiindex_columns
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -39,7 +40,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete)
+    env = TradingEnv(df=df, is_discrete=is_discrete, transaction_fee_percent=TRANSACTION_FEE)
 
     roi_list = []
     cagr_list = []
@@ -118,11 +119,7 @@ def get_benchmark_sp500(start_date, end_date):
         if sp500.empty:
             return 0.0, 0.0
 
-        if isinstance(sp500.columns, pd.MultiIndex):
-            try:
-                sp500.columns = sp500.columns.droplevel(1)
-            except:
-                pass
+        sp500 = flatten_multiindex_columns(sp500)
 
         # Ensure Close exists
         if 'Close' not in sp500.columns:
