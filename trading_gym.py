@@ -45,8 +45,25 @@ class TradingEnv(gym.Env):
             self.dfs = []
             for file in data_files:
                 # Load each file
-                df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
-                self.dfs.append(df_loaded)
+                try:
+                    df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
+
+                    required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+                    # Validate columns
+                    if not all(col in df_loaded.columns for col in required_columns):
+                        print(f"Skipping {file}: Missing required columns.")
+                        continue
+
+                    # Validate data types
+                    df_loaded[required_columns].astype(np.float32)
+
+                    self.dfs.append(df_loaded)
+                except Exception as e:
+                    print(f"Skipping {file}: Invalid data format ({e}).")
+                    continue
+
+            if not self.dfs:
+                raise ValueError(f"No valid data files found in {data_dir} directory.")
 
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
