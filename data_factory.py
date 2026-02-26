@@ -68,15 +68,26 @@ def fetch_data():
         # Extract data for the specific ticker
         try:
             if isinstance(all_data.columns, pd.MultiIndex):
-                df = all_data[ticker].copy()
-            elif len(tickers) == 1:
-                df = all_data.copy()
+                # Check if the top level contains the ticker
+                if ticker in all_data.columns.levels[0]:
+                    df = all_data[ticker].copy()
+                else:
+                    print(f"No data found for {ticker} in download results.")
+                    continue
             else:
-                print(f"Unexpected data format for {ticker}")
-                continue
+                # If single index, it means only one ticker was requested or returned
+                # We assume this DataFrame corresponds to the single ticker if len(tickers) == 1
+                if len(tickers) == 1:
+                    df = all_data.copy()
+                else:
+                    print(f"Unexpected data format for {ticker}: Single index returned for multiple tickers.")
+                    continue
         except KeyError:
             print(f"No data found for {ticker}.")
             continue
+        except Exception as e:
+             print(f"Error extracting data for {ticker}: {e}")
+             continue
 
         if df.empty:
             print(f"No data fetched for {ticker}.")
@@ -84,6 +95,7 @@ def fetch_data():
 
         # Check if MultiIndex columns (common in new yfinance)
         # With group_by='ticker', df[ticker] usually returns single level columns
+        # However, to be safe and consistent with previous logic:
         if isinstance(df.columns, pd.MultiIndex):
             # We assume the first level is Price and second is Ticker
             # We can drop the Ticker level if it's just one ticker
