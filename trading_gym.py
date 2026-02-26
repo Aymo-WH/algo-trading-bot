@@ -173,7 +173,26 @@ class TradingEnv(gym.Env):
         return self.obs_matrix[self.current_step : self.current_step + self.window_size]
 
     def render(self, mode='human'):
-        pass
+        if mode == 'human':
+            # Calculate current price based on the current window position
+            decision_idx = self.current_step + self.window_size - 1
+
+            # Ensure we don't go out of bounds
+            if decision_idx < len(self._prices):
+                current_price = self._prices[decision_idx]
+            else:
+                current_price = self._prices[-1]
+
+            net_worth = self.cash + (self.shares_held * current_price)
+            profit = net_worth - self.initial_balance
+
+            print(f"Step: {self.current_step}")
+            print(f"Price: {current_price:.2f}")
+            print(f"Cash: {self.cash:.2f}")
+            print(f"Shares: {self.shares_held:.2f}")
+            print(f"Net Worth: {net_worth:.2f}")
+            print(f"Profit: {profit:.2f}")
+            print("-" * 20)
 
     def close(self):
         pass
