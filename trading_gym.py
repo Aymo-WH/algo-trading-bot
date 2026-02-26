@@ -5,24 +5,31 @@ import numpy as np
 import glob
 import random
 import os
+from utils import load_config
 
 class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=0.001):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None):
         """
         Initialize the Trading Environment.
 
         :param df: Pandas DataFrame containing historical data. If None, loads from data_dir.
         :param is_discrete: Boolean flag for discrete action space (True) or continuous (False).
         :param data_dir: Directory path to load data from if df is None.
-        :param transaction_fee_percent: Transaction fee as a percentage of trade value (default 0.001 = 0.1%).
+        :param transaction_fee_percent: Transaction fee as a percentage of trade value (default None -> load from config or 0.001).
         """
         super(TradingEnv, self).__init__()
 
         self.is_discrete = is_discrete
-        self.transaction_fee_percent = transaction_fee_percent
+
+        if transaction_fee_percent is None:
+            config = load_config()
+            self.transaction_fee_percent = config.get('transaction_fee_percent', 0.001)
+        else:
+            self.transaction_fee_percent = transaction_fee_percent
+
         self.window_size = 10
 
         # Load data

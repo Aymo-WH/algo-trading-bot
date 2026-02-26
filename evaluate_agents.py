@@ -16,7 +16,6 @@ warnings.filterwarnings("ignore")
 MODELS_DIR = "models/"
 DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
-TRANSACTION_FEE = 0.001 # 0.1%
 
 def load_agent(model_path):
     if "ppo" in model_path.lower():
@@ -40,7 +39,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete, transaction_fee_percent=TRANSACTION_FEE)
+    env = TradingEnv(df=df, is_discrete=is_discrete)
 
     roi_list = []
     cagr_list = []
