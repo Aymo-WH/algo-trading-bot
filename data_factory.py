@@ -4,6 +4,15 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
+import json
+
+def load_config():
+    """Loads configuration from config.json, returns empty dict if not found."""
+    try:
+        with open('config.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
 def download_nltk_data():
     try:
@@ -45,14 +54,22 @@ def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
 
+    # Load configuration
+    config = load_config()
+
     # Ensure data directory exists
     os.makedirs('data', exist_ok=True)
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
 
-    tickers = ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC']
-    start_date = '2018-01-01'
-    end_date = '2026-01-01'
+    # Use configuration with fallbacks
+    tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
+    start_date = config.get('start_date', '2018-01-01')
+    end_date = config.get('end_date', '2026-01-01')
+
+    train_start_date = config.get('train_start_date', '2018-01-01')
+    train_end_date = config.get('train_end_date', '2022-12-31')
+    test_start_date = config.get('test_start_date', '2023-01-01')
 
     for ticker in tickers:
         print(f"Fetching {ticker} data from {start_date} to {end_date}...")
@@ -134,8 +151,10 @@ def fetch_data():
 
         # Split Data
         try:
-            train_df = df.loc['2018-01-01':'2022-12-31']
-            test_df = df.loc['2023-01-01':]
+            # Slicing with .loc using strings works if the index is DatetimeIndex or strings.
+            # yfinance returns DatetimeIndex, so string slicing is supported.
+            train_df = df.loc[train_start_date:train_end_date]
+            test_df = df.loc[test_start_date:]
 
             # Save to CSV
             train_file = f'data/train/{ticker}_data.csv'
