@@ -95,6 +95,14 @@ def fetch_data():
         print(f"Error fetching data: {e}")
         return
 
+    # Fetch data for all tickers
+    print(f"Fetching data for all tickers from {start_date} to {end_date}...")
+    try:
+        all_data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return
+
     for ticker in tickers:
         print(f"Processing {ticker}...")
 
@@ -113,6 +121,9 @@ def fetch_data():
         except Exception as e:
             print(f"Error extracting data for {ticker}: {e}")
             continue
+        except Exception as e:
+             print(f"Error extracting data for {ticker}: {e}")
+             continue
 
         if df.empty:
             print(f"No data fetched for {ticker}.")
