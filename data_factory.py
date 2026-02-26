@@ -71,29 +71,36 @@ def fetch_data():
     train_end_date = config.get('train_end_date', '2022-12-31')
     test_start_date = config.get('test_start_date', '2023-01-01')
 
-    for ticker in tickers:
-        print(f"Fetching {ticker} data from {start_date} to {end_date}...")
+    print(f"Fetching data for {tickers} from {start_date} to {end_date}...")
+    try:
+        # Fetch data for all tickers at once
+        data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return
 
-        # Fetch data
+    for ticker in tickers:
+        print(f"Processing {ticker}...")
+
         try:
-            df = yf.download(ticker, start=start_date, end=end_date)
+            # Extract dataframe for specific ticker
+            if isinstance(data.columns, pd.MultiIndex):
+                try:
+                    df = data[ticker].copy()
+                except KeyError:
+                    print(f"No data found for {ticker} in bulk download.")
+                    continue
+            else:
+                # Fallback if only one ticker or flat structure returned
+                df = data.copy()
+
         except Exception as e:
-            print(f"Error fetching data for {ticker}: {e}")
+            print(f"Error extracting data for {ticker}: {e}")
             continue
 
         if df.empty:
             print(f"No data fetched for {ticker}.")
             continue
-
-        # Check if MultiIndex columns (common in new yfinance)
-        if isinstance(df.columns, pd.MultiIndex):
-            # We assume the first level is Price and second is Ticker
-            # We can drop the Ticker level if it's just one ticker
-            try:
-                df.columns = df.columns.droplevel(1)
-            except Exception as e:
-                print(f"Warning: Could not drop level from MultiIndex columns for {ticker}: {e}")
-                pass
 
         # Ensure 'Close' column exists
         if 'Close' not in df.columns:
