@@ -58,7 +58,6 @@ def fetch_data():
     config = load_config()
 
     # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
 
