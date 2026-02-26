@@ -40,7 +40,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete)
+    env = TradingEnv(df=df, is_discrete=is_discrete, transaction_fee_percent=TRANSACTION_FEE)
 
     roi_list = []
     cagr_list = []
