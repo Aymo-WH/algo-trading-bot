@@ -5,15 +5,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
-import json
-
-def load_config():
-    """Loads configuration from config.json, returns empty dict if not found."""
-    try:
-        with open('config.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+from utils import load_config
 
 MOCK_HEADLINES = [
     "Company reports record earnings.",
