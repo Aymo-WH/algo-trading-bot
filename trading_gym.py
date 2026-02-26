@@ -28,7 +28,6 @@ class TradingEnv(gym.Env):
         # Load data
         if df is not None:
             self.dfs = [df]
-            self.df = df
         else:
             # Find all CSV files in data/ folder
             pattern = os.path.join(data_dir, '*_data.csv')
@@ -42,13 +41,18 @@ class TradingEnv(gym.Env):
                 df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
                 self.dfs.append(df_loaded)
 
-            # Select a random DataFrame initially
-            self.df = random.choice(self.dfs)
+        # Precompute observation matrices and prices for all DataFrames
+        self.precomputed_data = []
+        for d in self.dfs:
+            obs = d[['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
+            prices = d['Close'].values
+            self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices})
 
-        # Update obs_matrix to include new features: Close, RSI, MACD, Sentiment_Score, BB_Upper, BB_Lower, ATR
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
-        
-        self._prices = self.df['Close'].values 
+        # Select a random DataFrame initially
+        selected_data = random.choice(self.precomputed_data)
+        self.df = selected_data['df']
+        self.obs_matrix = selected_data['obs']
+        self._prices = selected_data['prices']
 
         # Define action and observation space
         if self.is_discrete:
@@ -68,12 +72,11 @@ class TradingEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        # Randomly select a DataFrame for the new episode
-        self.df = random.choice(self.dfs)
-
-        # Rebuild observation matrix and prices for the chosen stock
-        self.obs_matrix = self.df[['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
-        self._prices = self.df['Close'].values
+        # Randomly select a precomputed data entry for the new episode
+        selected_data = random.choice(self.precomputed_data)
+        self.df = selected_data['df']
+        self.obs_matrix = selected_data['obs']
+        self._prices = selected_data['prices']
 
         if options and 'start_step' in options:
             self.current_step = options['start_step']
