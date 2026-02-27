@@ -2,6 +2,7 @@ import unittest
 import pandas as pd
 import numpy as np
 import os
+import shutil
 from trading_gym import TradingEnv
 
 class TestTradingEnvSecurity(unittest.TestCase):
