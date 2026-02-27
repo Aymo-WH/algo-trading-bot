@@ -34,7 +34,7 @@ class TradingEnv(gym.Env):
         else:
             self.transaction_fee_percent = transaction_fee_percent
 
-        self.window_size = window_size
+        self.window_size = 10 # Default window size
 
         # Load data
         if df is not None:
