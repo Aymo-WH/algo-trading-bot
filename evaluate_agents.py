@@ -72,7 +72,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
             # Count trades based on fee
             fee = info.get('step_fee', 0.0)
-            if fee > 0:
+            if fee > 0.01:
                 episode_trades += 1
                 episode_fees += fee
 

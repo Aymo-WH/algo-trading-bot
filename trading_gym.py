@@ -85,9 +85,9 @@ class TradingEnv(gym.Env):
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
         # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 7
+        # num_features = 9 (7 market features + 2 portfolio features)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 9), dtype=np.float32
         )
 
         self.initial_balance = 10000.0
@@ -197,7 +197,27 @@ class TradingEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _get_observation(self):
-        return self.obs_matrix[self.current_step : self.current_step + self.window_size]
+        base_obs = self.obs_matrix[self.current_step : self.current_step + self.window_size]
+
+        # Calculate portfolio features
+        decision_idx = self.current_step + self.window_size - 1
+        if decision_idx < len(self._prices):
+            current_price = self._prices[decision_idx]
+        else:
+            current_price = self._prices[-1]
+
+        norm_cash = self.cash / self.initial_balance
+        norm_holdings = (self.shares_held * current_price) / self.initial_balance
+
+        # Create a column of portfolio features to append to the window
+        # We replicate the scalar portfolio state across the time window
+        # because the agent makes a decision based on the whole window,
+        # and current portfolio state is relevant for the current decision.
+        portfolio_features = np.zeros((self.window_size, 2), dtype=np.float32)
+        portfolio_features[:, 0] = norm_cash
+        portfolio_features[:, 1] = norm_holdings
+
+        return np.concatenate((base_obs, portfolio_features), axis=1)
 
     def render(self, mode='human'):
         if mode == 'human':
