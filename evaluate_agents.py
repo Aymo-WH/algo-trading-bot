@@ -188,7 +188,7 @@ def main():
         # Ensure start_step fits within dataframe minus window_size
         # Env window_size is hardcoded to 10 in trading_gym.py
         window_size = 10
-        max_step = len(df) - window_size - 1
+        max_step = len(df) - window_size - 90 - 1
 
         if max_step > 0:
              steps = [random.randint(0, max_step) for _ in range(5)]
