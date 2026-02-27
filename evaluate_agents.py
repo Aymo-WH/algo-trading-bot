@@ -115,16 +115,21 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         "End Date": df['Date'].iloc[-1]
     }
 
-def get_benchmark_sp500(start_date, end_date):
+def get_benchmark_sp500(start_date, end_date, sp500_df=None):
     # Fetch S&P 500 data
     try:
-        # Download usually returns index as Date
-        sp500 = yf.download("^GSPC", start=start_date, end=end_date, progress=False)
+        if sp500_df is not None:
+            # Optimize: Slice from pre-fetched dataframe
+            # Use boolean mask to respect boundaries [start, end)
+            mask = (sp500_df.index >= start_date) & (sp500_df.index < end_date)
+            sp500 = sp500_df[mask]
+        else:
+            # Download usually returns index as Date
+            sp500 = yf.download("^GSPC", start=start_date, end=end_date, progress=False)
+            sp500 = flatten_multiindex_columns(sp500)
 
         if sp500.empty:
             return 0.0, 0.0
-
-        sp500 = flatten_multiindex_columns(sp500)
 
         # Ensure Close exists
         if 'Close' not in sp500.columns:
@@ -176,6 +181,10 @@ def main():
     stock_dfs = {}
     stock_sp500_benchmarks = {}
 
+    # Store all dates to fetch global S&P 500 data once
+    all_start_dates = []
+    all_end_dates = []
+
     for data_path in data_files:
         stock_name = os.path.basename(data_path).replace("_data.csv", "")
         df = pd.read_csv(data_path)
@@ -197,7 +206,36 @@ def main():
 
         stock_start_steps[stock_name] = steps
 
-        # Calculate S&P 500 Benchmark for these 5 windows
+        # Collect dates for S&P 500 optimization
+        for s in steps:
+            s_date = df['Date'].iloc[s]
+            e_idx = min(s + 90, len(df) - 1)
+            e_date = df['Date'].iloc[e_idx]
+            all_start_dates.append(s_date)
+            all_end_dates.append(e_date)
+
+    # Fetch global S&P 500 data if dates are available
+    global_sp500_df = None
+    if all_start_dates:
+        global_min_date = min(all_start_dates)
+        global_max_date = max(all_end_dates)
+        # Add a buffer day to ensure end date is covered (yfinance is exclusive on end)
+        global_max_date_buffer = global_max_date + pd.Timedelta(days=1)
+
+        try:
+            print(f"Fetching S&P 500 benchmark data from {global_min_date.date()} to {global_max_date_buffer.date()}...")
+            global_sp500_df = yf.download("^GSPC", start=global_min_date, end=global_max_date_buffer, progress=False)
+            global_sp500_df = flatten_multiindex_columns(global_sp500_df)
+            if global_sp500_df.empty:
+                 print("Warning: Fetched S&P 500 data is empty.")
+                 global_sp500_df = None
+        except Exception as e:
+            print(f"Error pre-fetching S&P 500 data: {e}")
+            global_sp500_df = None
+
+    # Calculate Benchmarks using optimized or cached approach
+    for stock_name, steps in stock_start_steps.items():
+        df = stock_dfs[stock_name]
         sp_rois = []
         sp_cagrs = []
         for s in steps:
@@ -210,7 +248,7 @@ def main():
             # Check cache
             date_key = (s_date, e_date)
             if date_key not in sp500_cache:
-                 sp500_cache[date_key] = get_benchmark_sp500(s_date, e_date)
+                 sp500_cache[date_key] = get_benchmark_sp500(s_date, e_date, sp500_df=global_sp500_df)
 
             r, c = sp500_cache[date_key]
             sp_rois.append(r)
