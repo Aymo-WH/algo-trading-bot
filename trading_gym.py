@@ -14,7 +14,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
         """
         Initialize the Trading Environment.
 
