@@ -22,6 +22,7 @@ class TradingEnv(gym.Env):
         :param is_discrete: Boolean flag for discrete action space (True) or continuous (False).
         :param data_dir: Directory path to load data from if df is None.
         :param transaction_fee_percent: Transaction fee as a percentage of trade value (default None -> load from config or 0.001).
+        :param window_size: Size of the observation window (default 10).
         """
         super(TradingEnv, self).__init__()
 
@@ -33,7 +34,7 @@ class TradingEnv(gym.Env):
         else:
             self.transaction_fee_percent = transaction_fee_percent
 
-        self.window_size = 10
+        self.window_size = window_size
 
         # Load data
         if df is not None:
