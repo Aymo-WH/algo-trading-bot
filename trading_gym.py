@@ -5,7 +5,23 @@ import numpy as np
 import glob
 import random
 import os
+from enum import IntEnum
 from utils import load_config
+
+class Actions(IntEnum):
+    SELL_100 = 0
+    SELL_50 = 1
+    HOLD = 2
+    BUY_50 = 3
+    BUY_100 = 4
+
+ACTION_MAPPING = {
+    Actions.SELL_100: -1.0,
+    Actions.SELL_50: -0.5,
+    Actions.HOLD: 0.0,
+    Actions.BUY_50: 0.5,
+    Actions.BUY_100: 1.0
+}
 
 class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
@@ -14,7 +30,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
         """
         Initialize the Trading Environment.
 
@@ -91,7 +107,7 @@ class TradingEnv(gym.Env):
 
         # Define action and observation space
         if self.is_discrete:
-            self.action_space = spaces.Discrete(5)
+            self.action_space = spaces.Discrete(len(Actions))
         else:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
@@ -144,14 +160,8 @@ class TradingEnv(gym.Env):
         
         # Interpret action
         if self.is_discrete:
-            # Map discrete actions to percentages
-            # 0 -> -1.0 (Sell 100%)
-            # 1 -> -0.5 (Sell 50%)
-            # 2 -> 0.0 (Hold)
-            # 3 -> 0.5 (Buy 50%)
-            # 4 -> 1.0 (Buy 100%)
-            mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
-            act = mapping[int(action)]
+            # Map discrete actions to percentages using ACTION_MAPPING
+            act = ACTION_MAPPING[Actions(int(action))]
         else:
             # Action is a 1D array from Box space, e.g., [0.5]
             act = float(action[0])
