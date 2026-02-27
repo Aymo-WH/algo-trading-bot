@@ -105,9 +105,6 @@ def fetch_data():
         except Exception as e:
             print(f"Error extracting data for {ticker}: {e}")
             continue
-        except Exception as e:
-             print(f"Error extracting data for {ticker}: {e}")
-             continue
 
         if df.empty:
             print(f"No data fetched for {ticker}.")
