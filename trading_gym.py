@@ -92,6 +92,7 @@ class TradingEnv(gym.Env):
 
         self.initial_balance = 10000.0
         self.current_step = 0
+        self.episode_length = 90
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -109,6 +110,7 @@ class TradingEnv(gym.Env):
             max_step = len(self.df) - self.window_size - 1
             self.current_step = random.randint(0, max_step) if max_step > 0 else 0
 
+        self.start_step = self.current_step
         self.cash = self.initial_balance
         self.shares_held = 0
 
@@ -181,7 +183,8 @@ class TradingEnv(gym.Env):
         reward = new_val - prev_val
 
         # Check termination
-        terminated = (self.current_step + self.window_size) >= len(self.df)
+        terminated = (self.current_step - self.start_step >= self.episode_length) or \
+                     ((self.current_step + self.window_size) >= len(self.df))
         truncated = False
         
         # Bankruptcy check
