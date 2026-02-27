@@ -87,9 +87,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
         # Calculate CAGR for this episode
         # Start date is at start_step
-        # End date is last date of DF (as per env termination logic)
+        # End date is the current step (end of episode)
         ep_start_date = df['Date'].iloc[start_step]
-        ep_end_date = df['Date'].iloc[-1]
+        ep_end_date = df['Date'].iloc[env.current_step]
         cagr = calculate_cagr(INITIAL_CAPITAL, final_value, ep_start_date, ep_end_date) * 100
 
         roi_list.append(roi)
@@ -202,7 +202,10 @@ def main():
         sp_cagrs = []
         for s in steps:
             s_date = df['Date'].iloc[s]
-            e_date = df['Date'].iloc[-1]
+
+            # End index is start + 90 steps (or end of DF)
+            e_idx = min(s + 90, len(df) - 1)
+            e_date = df['Date'].iloc[e_idx]
 
             # Check cache
             date_key = (s_date, e_date)
@@ -241,7 +244,11 @@ def main():
             for s in start_steps:
                  # BH logic: (End - Start) / Start
                  start_price = df['Close'].iloc[s]
-                 end_price = df['Close'].iloc[-1]
+
+                 # End index is start + 90 steps (or end of DF)
+                 e_idx = min(s + 90, len(df) - 1)
+                 end_price = df['Close'].iloc[e_idx]
+
                  bh_rois.append(((end_price - start_price) / start_price) * 100)
 
             bh_roi = np.mean(bh_rois)
