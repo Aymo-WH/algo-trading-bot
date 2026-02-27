@@ -24,6 +24,8 @@ class TestTradingEnvSecurity(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
+        # Clear the cache to prevent stale data in tests
+        TradingEnv._DATA_CACHE.clear()
 
     def test_missing_columns_recovery(self):
         # Create a dataframe with missing columns alongside valid one
