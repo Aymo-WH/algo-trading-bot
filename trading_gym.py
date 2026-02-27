@@ -11,7 +11,10 @@ class TradingEnv(gym.Env):
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
+    # Class-level cache to store loaded DataFrames keyed by data_dir
+    _DATA_CACHE = {}
+
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None):
         """
         Initialize the Trading Environment.
 
@@ -37,34 +40,41 @@ class TradingEnv(gym.Env):
         if df is not None:
             self.dfs = [df]
         else:
-            # Find all CSV files in data/ folder
-            pattern = os.path.join(data_dir, '*_data.csv')
-            data_files = glob.glob(pattern)
-            if not data_files:
-                raise FileNotFoundError(f"No data files found in {data_dir} directory matching pattern *_data.csv")
+            # Check cache first
+            if data_dir in TradingEnv._DATA_CACHE:
+                self.dfs = TradingEnv._DATA_CACHE[data_dir]
+            else:
+                # Find all CSV files in data/ folder
+                pattern = os.path.join(data_dir, '*_data.csv')
+                data_files = glob.glob(pattern)
+                if not data_files:
+                    raise FileNotFoundError(f"No data files found in {data_dir} directory matching pattern *_data.csv")
 
-            self.dfs = []
-            for file in data_files:
-                # Load each file
-                try:
-                    df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
+                self.dfs = []
+                for file in data_files:
+                    # Load each file
+                    try:
+                        df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
 
-                    required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
-                    # Validate columns
-                    if not all(col in df_loaded.columns for col in required_columns):
-                        print(f"Skipping {file}: Missing required columns.")
+                        required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+                        # Validate columns
+                        if not all(col in df_loaded.columns for col in required_columns):
+                            print(f"Skipping {file}: Missing required columns.")
+                            continue
+
+                        # Validate data types
+                        df_loaded[required_columns].astype(np.float32)
+
+                        self.dfs.append(df_loaded)
+                    except Exception as e:
+                        print(f"Skipping {file}: Invalid data format ({e}).")
                         continue
 
-                    # Validate data types
-                    df_loaded[required_columns].astype(np.float32)
+                if not self.dfs:
+                    raise ValueError(f"No valid data files found in {data_dir} directory.")
 
-                    self.dfs.append(df_loaded)
-                except (pd.errors.EmptyDataError, KeyError, ValueError) as e:
-                    print(f"Skipping {file}: Invalid data format ({e}).")
-                    continue
-
-            if not self.dfs:
-                raise ValueError(f"No valid data files found in {data_dir} directory.")
+                # Update cache
+                TradingEnv._DATA_CACHE[data_dir] = self.dfs
 
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
