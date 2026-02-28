@@ -5,6 +5,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
+import re
 from utils import load_config
 
 MOCK_HEADLINES = [
@@ -90,6 +91,21 @@ def fetch_data():
     for ticker in tickers:
         print(f"Processing {ticker}...")
 
+        # Sanitize ticker to prevent path traversal
+        clean_ticker = os.path.basename(ticker)
+        # Allow standard alphanumeric characters, dot, hyphen, underscore, and caret for index tickers
+        if not re.match(r'^[\^a-zA-Z0-9_.-]+$', clean_ticker):
+             print(f"Skipping invalid ticker: {ticker}")
+             continue
+        if clean_ticker != ticker:
+             print(f"Warning: Ticker '{ticker}' sanitized to '{clean_ticker}'")
+             # Proceed with sanitized ticker for file saving purposes,
+             # but we still need to access data using the original key if applicable.
+
+        # However, yfinance download uses the original ticker list.
+        # So we should probably use the original ticker to access data,
+        # but the sanitized ticker for filenames.
+
         try:
             # Extract dataframe for specific ticker
             if isinstance(data.columns, pd.MultiIndex):
@@ -172,11 +188,12 @@ def fetch_data():
             test_df = df.loc[test_start_date:]
 
             # Save to CSV
-            train_file = f'data/train/{ticker}_data.csv'
+            # USE CLEAN TICKER HERE
+            train_file = f'data/train/{clean_ticker}_data.csv'
             train_df.to_csv(train_file)
             print(f"Train data saved to {train_file}")
 
-            test_file = f'data/test/{ticker}_data.csv'
+            test_file = f'data/test/{clean_ticker}_data.csv'
             test_df.to_csv(test_file)
             print(f"Test data saved to {test_file}")
 
