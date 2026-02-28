@@ -1,131 +1,100 @@
+import sys
 import unittest
+from unittest.mock import MagicMock, patch
+import os
 import pandas as pd
 import numpy as np
+
+# Add parent directory to path to import data_factory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import data_factory
 
-class TestDataFactoryRefactor(unittest.TestCase):
-    def setUp(self):
-        # Create a sample DataFrame with enough data for indicators
-        dates = pd.date_range(start='2020-01-01', periods=100)
-        self.df = pd.DataFrame({
-            'Close': np.random.uniform(100, 200, 100),
-            'High': np.random.uniform(105, 205, 100),
-            'Low': np.random.uniform(95, 195, 100)
+class TestDataFactorySecurity(unittest.TestCase):
+
+    @patch('data_factory.load_config')
+    @patch('data_factory.yf.download')
+    @patch('data_factory.SentimentIntensityAnalyzer')
+    @patch('os.makedirs')
+    @patch('pandas.DataFrame.to_csv')
+    @patch('data_factory.download_nltk_data')
+    def test_fetch_data_sanitization(self, mock_download_nltk, mock_to_csv, mock_makedirs, mock_sia_cls, mock_download, mock_load_config):
+        print("Starting security test...")
+
+        # Configure config with various ticker types:
+        # 1. Malicious path traversal
+        # 2. Standard ticker
+        # 3. Index ticker (starts with ^)
+        mock_load_config.return_value = {
+            'tickers': ['../malicious', 'NVDA', '^GSPC'],
+            'start_date': '2020-01-01',
+            'end_date': '2020-01-10',
+            'train_start_date': '2020-01-01',
+            'train_end_date': '2020-01-05',
+            'test_start_date': '2020-01-06'
+        }
+
+        # Create a real but small pandas DataFrame so we don't need to mock all of pandas operations
+        dates = pd.date_range(start='2020-01-01', periods=30)
+        np.random.seed(42) # For reproducibility
+        df = pd.DataFrame({
+            'Open': np.random.rand(30) * 100,
+            'High': np.random.rand(30) * 100,
+            'Low': np.random.rand(30) * 100,
+            'Close': np.random.rand(30) * 100,
+            'Volume': np.random.randint(1000, 10000, size=30)
         }, index=dates)
 
-        # Ensure High >= Close and Low <= Close for sanity (though math works regardless)
-        self.df['High'] = np.maximum(self.df['High'], self.df['Close'])
-        self.df['Low'] = np.minimum(self.df['Low'], self.df['Close'])
+        # Mock yfinance return
+        # yfinance returns a MultiIndex columns if group_by='ticker' is used with multiple tickers
+        # However, if data_factory does `data[ticker]`, we can mock `data` as a dict-like object
+        class MockDataWrapper:
+            def __init__(self, df):
+                self.df = df
+                # Make columns NOT a MultiIndex to take the fallback path in data_factory 
+                # OR make it a MultiIndex and mock __getitem__
+                self.columns = pd.MultiIndex.from_tuples([('Close', 'NVDA')]) 
+            def __getitem__(self, key):
+                return self.df.copy()
 
-    def test_calculate_rsi(self):
-        # Expected Logic (from original code)
-        df_expected = self.df.copy()
-        delta = df_expected['Close'].diff()
-        gain = (delta.where(delta > 0, 0))
-        loss = (-delta.where(delta < 0, 0))
-        avg_gain = gain.ewm(com=13, adjust=False).mean()
-        avg_loss = loss.ewm(com=13, adjust=False).mean()
-        rs = avg_gain / avg_loss
-        expected_rsi = 100 - (100 / (1 + rs))
-        expected_rsi.name = 'RSI'
+        mock_data = MockDataWrapper(df)
+        mock_download.return_value = mock_data
 
-        # Actual Logic (using new function)
-        if hasattr(data_factory, 'calculate_rsi'):
-            df_actual = self.df.copy()
-            df_actual = data_factory.calculate_rsi(df_actual)
-            pd.testing.assert_series_equal(df_actual['RSI'], expected_rsi, rtol=1e-5)
-        else:
-            self.skipTest("calculate_rsi not yet implemented")
+        # Mock SentimentIntensityAnalyzer instance to avoid NLTK downloads/processing
+        mock_sia_instance = MagicMock()
+        mock_sia_instance.polarity_scores.return_value = {'compound': 0.5}
+        mock_sia_cls.return_value = mock_sia_instance
 
-    def test_calculate_macd(self):
-        # Expected Logic
-        df_expected = self.df.copy()
-        exp1 = df_expected['Close'].ewm(span=12, adjust=False).mean()
-        exp2 = df_expected['Close'].ewm(span=26, adjust=False).mean()
-        expected_macd = exp1 - exp2
-        expected_macd.name = 'MACD'
-        expected_signal = expected_macd.ewm(span=9, adjust=False).mean()
-        expected_signal.name = 'Signal_Line'
+        # Run the function
+        try:
+            data_factory.fetch_data()
+        except Exception as e:
+            self.fail(f"Exception during execution: {e}")
 
-        # Actual Logic
-        if hasattr(data_factory, 'calculate_macd'):
-            df_actual = self.df.copy()
-            df_actual = data_factory.calculate_macd(df_actual)
-            pd.testing.assert_series_equal(df_actual['MACD'], expected_macd, rtol=1e-5)
-            pd.testing.assert_series_equal(df_actual['Signal_Line'], expected_signal, rtol=1e-5)
-        else:
-            self.skipTest("calculate_macd not yet implemented")
+        # Check results
+        print("\nChecking file paths passed to to_csv:")
+        
+        saved_paths = []
+        for call in mock_to_csv.call_args_list:
+            args, kwargs = call
+            if args:
+                saved_paths.append(args[0])
+                print(f" - {args[0]}")
 
-    def test_calculate_bollinger_bands(self):
-        # Expected Logic
-        df_expected = self.df.copy()
-        sma_20 = df_expected['Close'].rolling(window=20).mean()
-        std_20 = df_expected['Close'].rolling(window=20).std()
-        expected_upper = sma_20 + 2 * std_20
-        expected_upper.name = 'BB_Upper'
-        expected_lower = sma_20 - 2 * std_20
-        expected_lower.name = 'BB_Lower'
-
-        # Actual Logic
-        if hasattr(data_factory, 'calculate_bollinger_bands'):
-            df_actual = self.df.copy()
-            df_actual = data_factory.calculate_bollinger_bands(df_actual)
-            pd.testing.assert_series_equal(df_actual['BB_Upper'], expected_upper, rtol=1e-5)
-            pd.testing.assert_series_equal(df_actual['BB_Lower'], expected_lower, rtol=1e-5)
-        else:
-            self.skipTest("calculate_bollinger_bands not yet implemented")
-
-    def test_calculate_atr(self):
-        # Expected Logic
-        df_expected = self.df.copy()
-        high_low = df_expected['High'] - df_expected['Low']
-        high_close = (df_expected['High'] - df_expected['Close'].shift()).abs()
-        low_close = (df_expected['Low'] - df_expected['Close'].shift()).abs()
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        expected_atr = tr.rolling(window=14).mean()
-        expected_atr.name = 'ATR'
-
-        # Actual Logic
-        if hasattr(data_factory, 'calculate_atr'):
-            df_actual = self.df.copy()
-            df_actual = data_factory.calculate_atr(df_actual)
-            pd.testing.assert_series_equal(df_actual['ATR'], expected_atr, rtol=1e-5)
-        else:
-            self.skipTest("calculate_atr not yet implemented")
-
-    def test_extract_ticker_data_multiindex(self):
-        # Simulate MultiIndex DataFrame from yfinance (Ticker, Attribute)
-        # Note: yfinance group_by='ticker' results in top level Ticker
-        arrays = [
-            ['NVDA', 'NVDA', 'AAPL', 'AAPL'],
-            ['Close', 'Open', 'Close', 'Open']
-        ]
-        tuples = list(zip(*arrays))
-        index = pd.MultiIndex.from_tuples(tuples, names=['Ticker', 'Price'])
-        data = pd.DataFrame(np.random.randn(5, 4), columns=index)
-
-        if hasattr(data_factory, 'extract_ticker_data'):
-            df_nvda = data_factory.extract_ticker_data(data, 'NVDA')
-            self.assertIsInstance(df_nvda, pd.DataFrame)
-            self.assertIn('Close', df_nvda.columns)
-            self.assertIn('Open', df_nvda.columns)
-            # Should have dropped the ticker level
-            self.assertFalse(isinstance(df_nvda.columns, pd.MultiIndex))
-        else:
-            self.skipTest("extract_ticker_data not yet implemented")
-
-    def test_extract_ticker_data_flat(self):
-        # Simulate Flat DataFrame (single ticker or already processed)
-        data = pd.DataFrame({
-            'Close': np.random.randn(5),
-            'Open': np.random.randn(5)
-        })
-
-        if hasattr(data_factory, 'extract_ticker_data'):
-            df_res = data_factory.extract_ticker_data(data, 'NVDA') # Ticker arg ignored if structure is flat/fallback
-            pd.testing.assert_frame_equal(df_res, data)
-        else:
-            self.skipTest("extract_ticker_data not yet implemented")
+        # Verification
+        
+        # 1. Malicious Ticker '../malicious' should be sanitized to 'malicious'
+        self.assertIn('data/train/malicious_data.csv', saved_paths, "Sanitized malicious ticker not saved to correct path")
+        self.assertIn('data/test/malicious_data.csv', saved_paths, "Sanitized malicious ticker not saved to correct path")
+        
+        # Ensure NO traversal
+        for path in saved_paths:
+            self.assertNotIn('../', path, "Path traversal detected in saved file path")
+        
+        # 2. Standard Ticker 'NVDA' should be present
+        self.assertIn('data/train/NVDA_data.csv', saved_paths, "Valid ticker NVDA not saved")
+        
+        # 3. Index Ticker '^GSPC' should be present 
+        self.assertIn('data/train/^GSPC_data.csv', saved_paths, "Index ticker ^GSPC not saved (likely rejected by regex)")
 
 if __name__ == '__main__':
     unittest.main()

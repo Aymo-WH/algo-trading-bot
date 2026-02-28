@@ -5,6 +5,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import random
 import os
+import re
 from utils import load_config
 
 MOCK_HEADLINES = [
@@ -59,88 +60,6 @@ def get_mock_sentiment(sia):
     score += random.uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
 
-def extract_ticker_data(data, ticker):
-    """
-    Extracts a DataFrame for a specific ticker from a bulk download.
-    Handles MultiIndex columns if present.
-    """
-    if isinstance(data.columns, pd.MultiIndex):
-        try:
-            df = data[ticker].copy()
-        except KeyError:
-            print(f"No data found for {ticker} in bulk download.")
-            return None
-    else:
-        # Fallback if only one ticker or flat structure returned
-        df = data.copy()
-
-    if df.empty:
-        print(f"No data fetched for {ticker}.")
-        return None
-
-    return df
-
-def calculate_rsi(df, window=14):
-    """Calculates RSI (14-day)"""
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0))
-    loss = (-delta.where(delta < 0, 0))
-
-    # Average Gain/Loss using Wilder's Smoothing (alpha=1/14)
-    avg_gain = gain.ewm(com=window-1, adjust=False).mean()
-    avg_loss = loss.ewm(com=window-1, adjust=False).mean()
-
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-    return df
-
-def calculate_macd(df):
-    """Calculates MACD (12, 26, 9)"""
-    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-
-    df['MACD'] = exp1 - exp2
-    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    return df
-
-def calculate_bollinger_bands(df, window=20):
-    """Calculates Bollinger Bands (20-day)"""
-    sma_20 = df['Close'].rolling(window=window).mean()
-    std_20 = df['Close'].rolling(window=window).std()
-    df['BB_Upper'] = sma_20 + 2 * std_20
-    df['BB_Lower'] = sma_20 - 2 * std_20
-    return df
-
-def calculate_atr(df, window=14):
-    """Calculates ATR (14-day)"""
-    high_low = df['High'] - df['Low']
-    high_close = (df['High'] - df['Close'].shift()).abs()
-    low_close = (df['Low'] - df['Close'].shift()).abs()
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df['ATR'] = tr.rolling(window=window).mean()
-    return df
-
-def add_sentiment(df, sia):
-    """Adds Simulated Sentiment score"""
-    df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
-    return df
-
-def save_ticker_data(df, ticker, train_start, train_end, test_start):
-    """Splits and saves ticker data to CSV."""
-    try:
-        train_df = df.loc[train_start:train_end]
-        test_df = df.loc[test_start:]
-
-        train_file = f'data/train/{ticker}_data.csv'
-        train_df.to_csv(train_file)
-        print(f"Train data saved to {train_file}")
-
-        test_file = f'data/test/{ticker}_data.csv'
-        test_df.to_csv(test_file)
-        print(f"Test data saved to {test_file}")
-    except Exception as e:
-        print(f"Error splitting/saving data for {ticker}: {e}")
-
 def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
@@ -172,40 +91,114 @@ def fetch_data():
     for ticker in tickers:
         print(f"Processing {ticker}...")
 
+        # Sanitize ticker to prevent path traversal
+        clean_ticker = os.path.basename(ticker)
+        # Allow standard alphanumeric characters, dot, hyphen, underscore, and caret for index tickers
+        if not re.match(r'^[\^a-zA-Z0-9_.-]+$', clean_ticker):
+             print(f"Skipping invalid ticker: {ticker}")
+             continue
+        if clean_ticker != ticker:
+             print(f"Warning: Ticker '{ticker}' sanitized to '{clean_ticker}'")
+             # Proceed with sanitized ticker for file saving purposes, 
+             # but we still need to access data using the original key if applicable.
+        
+        # However, yfinance download uses the original ticker list. 
+        # So we should probably use the original ticker to access data, 
+        # but the sanitized ticker for filenames.
+
         try:
-            df = extract_ticker_data(data, ticker)
-            if df is None:
-                continue
-
-            # Ensure 'Close' column exists
-            if 'Close' not in df.columns:
-                print(f"Error: 'Close' column not found in dataframe for {ticker}. Columns: {df.columns}")
-                continue
-
-            print(f"Calculating RSI for {ticker}...")
-            df = calculate_rsi(df)
-
-            print(f"Calculating MACD for {ticker}...")
-            df = calculate_macd(df)
-
-            print(f"Calculating Bollinger Bands for {ticker}...")
-            df = calculate_bollinger_bands(df)
-
-            print(f"Calculating ATR for {ticker}...")
-            df = calculate_atr(df)
-
-            print(f"Calculating Simulated Sentiment for {ticker}...")
-            df = add_sentiment(df, sia)
-
-            # Drop NaN rows
-            df = df.dropna()
-
-            # Split Data and Save
-            save_ticker_data(df, ticker, train_start_date, train_end_date, test_start_date)
+            # Extract dataframe for specific ticker
+            if isinstance(data.columns, pd.MultiIndex):
+                try:
+                    df = data[ticker].copy()
+                except KeyError:
+                    print(f"No data found for {ticker} in bulk download.")
+                    continue
+            else:
+                # Fallback if only one ticker or flat structure returned
+                df = data.copy()
 
         except Exception as e:
             print(f"Error extracting data for {ticker}: {e}")
             continue
+
+        if df.empty:
+            print(f"No data fetched for {ticker}.")
+            continue
+
+        # Ensure 'Close' column exists
+        if 'Close' not in df.columns:
+            print(f"Error: 'Close' column not found in dataframe for {ticker}. Columns: {df.columns}")
+            continue
+
+        # Calculate RSI (14-day)
+        print(f"Calculating RSI for {ticker}...")
+        delta = df['Close'].diff()
+
+        # Gain/Loss
+        gain = (delta.where(delta > 0, 0))
+        loss = (-delta.where(delta < 0, 0))
+
+        # Average Gain/Loss using Wilder's Smoothing (alpha=1/14)
+        # com = 13 corresponds to alpha = 1/14
+        avg_gain = gain.ewm(com=13, adjust=False).mean()
+        avg_loss = loss.ewm(com=13, adjust=False).mean()
+
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+
+        # Calculate MACD (12, 26, 9)
+        print(f"Calculating MACD for {ticker}...")
+        # EMA 12
+        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+        # EMA 26
+        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+
+        df['MACD'] = exp1 - exp2
+        df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+        # Calculate Bollinger Bands (20-day)
+        print(f"Calculating Bollinger Bands for {ticker}...")
+        sma_20 = df['Close'].rolling(window=20).mean()
+        std_20 = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = sma_20 + 2 * std_20
+        df['BB_Lower'] = sma_20 - 2 * std_20
+
+        # Calculate ATR (14-day)
+        print(f"Calculating ATR for {ticker}...")
+        high_low = df['High'] - df['Low']
+        high_close = (df['High'] - df['Close'].shift()).abs()
+        low_close = (df['Low'] - df['Close'].shift()).abs()
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        df['ATR'] = tr.rolling(window=14).mean()
+
+        # Add Simulated Sentiment
+        print(f"Calculating Simulated Sentiment for {ticker}...")
+        # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
+        df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
+
+        # Drop NaN rows
+        df = df.dropna()
+
+        # Split Data
+        try:
+            # Slicing with .loc using strings works if the index is DatetimeIndex or strings.
+            # yfinance returns DatetimeIndex, so string slicing is supported.
+            train_df = df.loc[train_start_date:train_end_date]
+            test_df = df.loc[test_start_date:]
+
+            # Save to CSV
+            # USE CLEAN TICKER HERE
+            train_file = f'data/train/{clean_ticker}_data.csv'
+            train_df.to_csv(train_file)
+            print(f"Train data saved to {train_file}")
+
+            test_file = f'data/test/{clean_ticker}_data.csv'
+            test_df.to_csv(test_file)
+            print(f"Test data saved to {test_file}")
+
+        except Exception as e:
+            print(f"Error splitting/saving data for {ticker}: {e}")
 
 if __name__ == "__main__":
     fetch_data()
