@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 import random
 import os
 import re
@@ -226,6 +228,20 @@ def fetch_data():
         else:
             print(f"Warning: Could not find stationary series for {ticker} with d < 1.0. Using d=1.0")
             df['Close_FFD'] = frac_diff_ffd(df[['Close']], 1.0)['Close']
+
+        tech_cols = ['RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'ATR']
+        clean_idx = df[tech_cols].dropna().index
+        scaler = StandardScaler()
+        scaled_tech = scaler.fit_transform(df.loc[clean_idx, tech_cols])
+
+        pca = PCA(n_components=5)
+        pca_features = pca.fit_transform(scaled_tech)
+
+        pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
+        df.loc[clean_idx, pca_cols] = pca_features
+
+        # Drop the old highly-correlated columns
+        df.drop(columns=tech_cols, inplace=True)
 
         # Drop NaN rows
         df = df.dropna()
