@@ -5,6 +5,12 @@ import os
 import pandas as pd
 import numpy as np
 
+sys.modules['statsmodels'] = MagicMock()
+sys.modules['statsmodels.tsa'] = MagicMock()
+sys.modules['statsmodels.tsa.stattools'] = MagicMock()
+sys.modules['scipy'] = MagicMock()
+sys.modules['scipy.stats'] = MagicMock()
+
 # Add parent directory to path to import data_factory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import data_factory
