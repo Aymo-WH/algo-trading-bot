@@ -56,6 +56,9 @@ class TradingEnv(gym.Env):
                     # Load each file
                     try:
                         df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
+                        if len(df_loaded) < self.window_size + 2:
+                            print(f"Skipping {file}: Empty or not enough rows after dropna.")
+                            continue
 
                         required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
                         # Validate columns
@@ -203,7 +206,12 @@ class TradingEnv(gym.Env):
         if daily_return > 0:
             reward = daily_return * 100
         else:
-            reward = (daily_return * 100) * 2.5 # Heavy penalty for downside volatility
+            reward = (daily_return * 100) * 1.5 # Softened penalty
+            
+        # Hold Cash Penalty
+        if self.shares_held == 0:
+            reward -= 0.01
+            
         reward -= step_fee # Penalize broker costs
 
         # Check termination
