@@ -58,7 +58,7 @@ class TradingEnv(gym.Env):
 
                         required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
                         # Validate columns
-                        if not all(col in df_loaded.columns for col in required_columns):
+                        if not set(required_columns).issubset(df_loaded.columns):
                             print(f"Skipping {file}: Missing required columns.")
                             continue
 
