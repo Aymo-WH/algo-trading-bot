@@ -1,4 +1,5 @@
 import argparse
+import os
 from trading_gym import TradingEnv
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
@@ -34,8 +35,26 @@ def parse_args():
     )
     return parser.parse_args()
 
+def validate_path(path_str, arg_name):
+    """Validates that a given path is within the current working directory."""
+    if path_str is None:
+        return None
+    abs_path = os.path.abspath(path_str)
+    base_dir = os.path.abspath('.')
+
+    # Check if the resolved path starts with the base directory
+    # Adding os.sep ensures that '/base/dir2' doesn't match '/base/dir'
+    if not abs_path.startswith(base_dir + os.sep) and abs_path != base_dir:
+        raise ValueError(f"Security Error: {arg_name} '{path_str}' traverses outside the base directory.")
+
+    return path_str
+
 def main():
     args = parse_args()
+
+    # Validate paths
+    args.data_dir = validate_path(args.data_dir, "--data_dir")
+    args.save_path = validate_path(args.save_path, "--save_path")
 
     # Determine save path if not provided
     if args.save_path is None:
