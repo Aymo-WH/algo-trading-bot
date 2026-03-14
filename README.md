@@ -36,13 +36,13 @@ This project actively implements the following institutional mechanisms:
 pip install -r requirements.txt
 ```
 
-###2. Train the Agents
+2. Train the Agents
 
 ```Bash
 python train_agent.py --data_dir ./data --save_path ./models
 ```
 
-###3. Evaluate the Deflated Sharpe Ratio
+3. Evaluate the Deflated Sharpe Ratio
 
 ```Bash
 python evaluate_agents.py
