@@ -63,7 +63,7 @@ class TradingEnv(gym.Env):
                             continue
 
                         # Validate data types
-                        df_loaded[required_columns].astype(np.float32)
+                        df_loaded[required_columns] = df_loaded[required_columns].astype(np.float32)
 
                         self.dfs.append(df_loaded)
                     except Exception as e:
