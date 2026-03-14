@@ -57,7 +57,7 @@ class TradingEnv(gym.Env):
                     try:
                         df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
 
-                        required_columns = ['Close', 'Close_FFD', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+                        required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
                         # Validate columns
                         if not set(required_columns).issubset(df_loaded.columns):
                             print(f"Skipping {file}: Missing required columns.")
@@ -80,7 +80,7 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            obs = d[['Close_FFD', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']].values.astype(np.float32)
+            obs = d[['Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']].values.astype(np.float32)
             prices = d['Close'].values
             self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices})
 
