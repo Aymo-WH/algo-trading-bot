@@ -67,5 +67,30 @@ class TestTradingEnvSecurity(unittest.TestCase):
         with self.assertRaises(ValueError):
             env = TradingEnv(data_dir=self.test_dir)
 
+    def test_type_conversion(self):
+        # Create a dataframe with float64 data (default for numpy)
+        df_float64 = pd.DataFrame({
+            'Close': np.array([100.0, 101.0], dtype=np.float64),
+            'RSI': np.array([50.0, 51.0], dtype=np.float64),
+            'MACD': np.array([0.0, 0.1], dtype=np.float64),
+            'Sentiment_Score': np.array([0.5, 0.6], dtype=np.float64),
+            'BB_Upper': np.array([110.0, 111.0], dtype=np.float64),
+            'BB_Lower': np.array([90.0, 91.0], dtype=np.float64),
+            'ATR': np.array([1.0, 1.1], dtype=np.float64)
+        })
+        df_float64.to_csv(os.path.join(self.test_dir, 'float64_data.csv'), index=False)
+
+        # Remove other files to be sure
+        os.remove(os.path.join(self.test_dir, 'valid_data.csv'))
+
+        env = TradingEnv(data_dir=self.test_dir)
+
+        # Verify it was loaded and converted to float32
+        self.assertEqual(len(env.dfs), 1)
+        loaded_df = env.dfs[0]
+        required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+        for col in required_columns:
+            self.assertEqual(loaded_df[col].dtype, np.float32)
+
 if __name__ == '__main__':
     unittest.main()
