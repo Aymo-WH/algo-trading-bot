@@ -7,6 +7,8 @@ import random
 import os
 import re
 from utils import load_config
+from statsmodels.tsa.stattools import adfuller
+import scipy.stats as ss
 
 MOCK_HEADLINES = [
     "Company reports record earnings.",
@@ -28,6 +30,30 @@ MOCK_HEADLINES = [
     "Investors are cautious ahead of earnings."
 ]
 _MOCK_HEADLINE_SCORES = None
+
+def get_weights(d, size):
+    w = [1.]
+    for k in range(1, size):
+        w_ = -w[-1] / k * (d - k + 1)
+        w.append(w_)
+    return np.array(w[::-1]).reshape(-1, 1)
+
+def frac_diff_ffd(series, d, thres=1e-5):
+    w = get_weights(d, series.shape[0])
+    w_ = np.cumsum(abs(w))
+    w_ /= w_[-1]
+    skip = w_[w_ > thres].shape[0]
+    df = {}
+    for name in series.columns:
+        seriesF = series[[name]].ffill().dropna()
+        df_ = pd.Series(dtype=float)
+        for iloc in range(skip, seriesF.shape[0]):
+            loc = seriesF.index[iloc]
+            if not np.isfinite(series.loc[loc, name]): continue
+            df_[loc] = np.dot(w[-(iloc + 1):, :].T, seriesF.loc[seriesF.index[:iloc + 1], name])[0]
+        df[name] = df_.copy(deep=True)
+    df = pd.concat(df, axis=1)
+    return df
 
 def download_nltk_data():
     try:
@@ -177,6 +203,26 @@ def fetch_data():
         print(f"Calculating Simulated Sentiment for {ticker}...")
         # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
         df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
+
+        # Apply Fractional Differentiation to Close price
+        print(f"Applying Fractional Differentiation to {ticker}...")
+        optimal_d = 1.0
+        best_ffd = None
+        for d in np.arange(0.1, 1.0, 0.1):
+            df_ffd = frac_diff_ffd(df[['Close']], d)
+            # dropna is needed because frac diff introduces NaNs at the beginning
+            p_val = adfuller(df_ffd['Close'].dropna())[1]
+            if p_val < 0.05:
+                optimal_d = d
+                best_ffd = df_ffd['Close']
+                break
+
+        if best_ffd is not None:
+            print(f"Optimal d for {ticker} found: {optimal_d:.1f}")
+            df['Close_FFD'] = best_ffd
+        else:
+            print(f"Warning: Could not find stationary series for {ticker} with d < 1.0. Using d=1.0")
+            df['Close_FFD'] = frac_diff_ffd(df[['Close']], 1.0)['Close']
 
         # Drop NaN rows
         df = df.dropna()
