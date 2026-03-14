@@ -18,6 +18,9 @@ sys.modules['statsmodels.tsa'] = MagicMock()
 sys.modules['statsmodels.tsa.stattools'] = MagicMock()
 sys.modules['scipy'] = MagicMock()
 sys.modules['scipy.stats'] = MagicMock()
+sys.modules['sklearn'] = MagicMock()
+sys.modules['sklearn.decomposition'] = MagicMock()
+sys.modules['sklearn.preprocessing'] = MagicMock()
 
 import data_factory
 

@@ -21,12 +21,12 @@ class TestTradingEnvSecurity(unittest.TestCase):
         self.valid_df = pd.DataFrame({
             'Close': np.random.rand(20),
             'Close_FFD': np.random.rand(20),
-            'RSI': np.random.rand(20),
-            'MACD': np.random.rand(20),
             'Sentiment_Score': np.random.rand(20),
-            'BB_Upper': np.random.rand(20),
-            'BB_Lower': np.random.rand(20),
-            'ATR': np.random.rand(20)
+            'PCA_1': np.random.rand(20),
+            'PCA_2': np.random.rand(20),
+            'PCA_3': np.random.rand(20),
+            'PCA_4': np.random.rand(20),
+            'PCA_5': np.random.rand(20)
         })
 
     def tearDown(self):
@@ -37,7 +37,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
     def test_missing_columns_recovery(self):
         self.clean_directory()
         self.valid_df.to_csv(os.path.join(self.test_dir, 'valid_data.csv'), index=False)
-        bad_df = self.valid_df.drop(columns=['RSI'])
+        bad_df = self.valid_df.drop(columns=['PCA_1'])
         bad_df.to_csv(os.path.join(self.test_dir, 'missing_col_data.csv'), index=False)
 
         try:
@@ -61,7 +61,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
 
     def test_all_bad_files(self):
         self.clean_directory()
-        bad_df = self.valid_df.drop(columns=['RSI'])
+        bad_df = self.valid_df.drop(columns=['PCA_1'])
         bad_df.to_csv(os.path.join(self.test_dir, 'missing_col_data.csv'), index=False)
 
         # Catch either ValueError or FileNotFoundError
@@ -73,12 +73,12 @@ class TestTradingEnvSecurity(unittest.TestCase):
         df_float64 = pd.DataFrame({
             'Close': np.array([100.0, 101.0], dtype=np.float64),
             'Close_FFD': np.array([0.0, 0.1], dtype=np.float64),
-            'RSI': np.array([50.0, 51.0], dtype=np.float64),
-            'MACD': np.array([0.0, 0.1], dtype=np.float64),
             'Sentiment_Score': np.array([0.5, 0.6], dtype=np.float64),
-            'BB_Upper': np.array([110.0, 111.0], dtype=np.float64),
-            'BB_Lower': np.array([90.0, 91.0], dtype=np.float64),
-            'ATR': np.array([1.0, 1.1], dtype=np.float64)
+            'PCA_1': np.array([50.0, 51.0], dtype=np.float64),
+            'PCA_2': np.array([0.0, 0.1], dtype=np.float64),
+            'PCA_3': np.array([110.0, 111.0], dtype=np.float64),
+            'PCA_4': np.array([90.0, 91.0], dtype=np.float64),
+            'PCA_5': np.array([1.0, 1.1], dtype=np.float64)
         })
         df_float64.to_csv(os.path.join(self.test_dir, 'float64_data.csv'), index=False)
 
@@ -86,7 +86,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
 
         self.assertEqual(len(env.dfs), 1)
         loaded_df = env.dfs[0]
-        required_columns = ['Close', 'Close_FFD', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+        required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
         for col in required_columns:
             self.assertEqual(loaded_df[col].dtype, np.float32)
 

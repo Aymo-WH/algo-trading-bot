@@ -11,6 +11,9 @@ sys.modules['numpy'] = MagicMock()
 sys.modules['stable_baselines3'] = MagicMock()
 sys.modules['stable_baselines3.common.env_util'] = MagicMock()
 sys.modules['stable_baselines3.common.vec_env'] = MagicMock()
+sys.modules['sklearn'] = MagicMock()
+sys.modules['sklearn.decomposition'] = MagicMock()
+sys.modules['sklearn.preprocessing'] = MagicMock()
 
 import train_agent
 
