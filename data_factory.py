@@ -46,14 +46,13 @@ def frac_diff_ffd(series, d, thres=1e-5):
     df = {}
     for name in series.columns:
         seriesF = series[[name]].ffill().dropna()
-        df_ = pd.Series(dtype=float)
+        df_ = pd.Series(dtype=float, index=seriesF.index)
         for iloc in range(skip, seriesF.shape[0]):
             loc = seriesF.index[iloc]
             if not np.isfinite(series.loc[loc, name]): continue
-            df_[loc] = np.dot(w[-(iloc + 1):, :].T, seriesF.loc[seriesF.index[:iloc + 1], name])[0]
+            df_.loc[loc] = np.dot(w[-(iloc + 1):, :].T, seriesF.loc[seriesF.index[:iloc + 1], name])[0]
         df[name] = df_.copy(deep=True)
-    df = pd.concat(df, axis=1)
-    return df
+    return pd.concat(df, axis=1)
 
 def download_nltk_data():
     try:
@@ -208,6 +207,7 @@ def fetch_data():
         print(f"Applying Fractional Differentiation to {ticker}...")
         optimal_d = 1.0
         best_ffd = None
+        # Loop d from 0.1 to 0.9 in increments of 0.1
         for d in np.arange(0.1, 1.0, 0.1):
             df_ffd = frac_diff_ffd(df[['Close']], d)
             # dropna is needed because frac diff introduces NaNs at the beginning

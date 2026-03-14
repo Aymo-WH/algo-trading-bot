@@ -5,6 +5,7 @@ import numpy as np
 import glob
 import random
 import os
+from collections import deque
 from utils import load_config
 
 class TradingEnv(gym.Env):
@@ -130,7 +131,14 @@ class TradingEnv(gym.Env):
         self.net_worth = 10000.0
         self.total_fees = 0.0
 
-        observation = self._get_observation()
+        self.obs_deque = deque(maxlen=self.window_size)
+
+        # Populate initial deque
+        for i in range(self.window_size):
+            obs_step = self._get_single_observation(self.current_step + i, self.cash, self.shares_held)
+            self.obs_deque.append(obs_step)
+
+        observation = np.array(self.obs_deque, dtype=np.float32)
         info = {}
         return observation, info
 
@@ -207,33 +215,27 @@ class TradingEnv(gym.Env):
         if new_val < 1000:
             terminated = True
             
-        observation = self._get_observation()
+        # Append latest observation step to deque
+        new_obs_step = self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held)
+        self.obs_deque.append(new_obs_step)
+
+        observation = np.array(self.obs_deque, dtype=np.float32)
         info = {'step_fee': step_fee}
 
         return observation, reward, terminated, truncated, info
 
-    def _get_observation(self):
-        base_obs = self.obs_matrix[self.current_step : self.current_step + self.window_size]
-
-        # Calculate portfolio features
-        decision_idx = self.current_step + self.window_size - 1
-        if decision_idx < len(self._prices):
-            current_price = self._prices[decision_idx]
+    def _get_single_observation(self, step_idx, cash, shares_held):
+        if step_idx < len(self.obs_matrix):
+            base_obs = self.obs_matrix[step_idx]
+            current_price = self._prices[step_idx]
         else:
+            base_obs = self.obs_matrix[-1]
             current_price = self._prices[-1]
 
-        norm_cash = self.cash / self.initial_balance
-        norm_holdings = (self.shares_held * current_price) / self.initial_balance
+        norm_cash = cash / self.initial_balance
+        norm_holdings = (shares_held * current_price) / self.initial_balance
 
-        # Create a column of portfolio features to append to the window
-        # We replicate the scalar portfolio state across the time window
-        # because the agent makes a decision based on the whole window,
-        # and current portfolio state is relevant for the current decision.
-        portfolio_features = np.zeros((self.window_size, 2), dtype=np.float32)
-        portfolio_features[:, 0] = norm_cash
-        portfolio_features[:, 1] = norm_holdings
-
-        return np.concatenate((base_obs, portfolio_features), axis=1)
+        return np.concatenate((base_obs, [norm_cash, norm_holdings]))
 
     def render(self, mode='human'):
         if mode == 'human':
