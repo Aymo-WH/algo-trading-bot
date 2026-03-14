@@ -159,8 +159,9 @@ def fetch_data():
 
         # Calculate Bollinger Bands (20-day)
         print(f"Calculating Bollinger Bands for {ticker}...")
-        sma_20 = df['Close'].rolling(window=20).mean()
-        std_20 = df['Close'].rolling(window=20).std()
+        rolling_20 = df['Close'].rolling(window=20)
+        sma_20 = rolling_20.mean()
+        std_20 = rolling_20.std()
         df['BB_Upper'] = sma_20 + 2 * std_20
         df['BB_Lower'] = sma_20 - 2 * std_20
 
