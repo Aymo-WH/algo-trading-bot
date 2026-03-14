@@ -13,12 +13,14 @@ class TestTradingEnvSecurity(unittest.TestCase):
         TradingEnv._DATA_CACHE.clear()
 
     def setUp(self):
+        TradingEnv._DATA_CACHE.clear()
         self.test_dir = 'test_data_security'
         self.clean_directory()
 
         # valid dataframe
         self.valid_df = pd.DataFrame({
             'Close': np.random.rand(20),
+            'Close_FFD': np.random.rand(20),
             'RSI': np.random.rand(20),
             'MACD': np.random.rand(20),
             'Sentiment_Score': np.random.rand(20),
@@ -28,9 +30,9 @@ class TestTradingEnvSecurity(unittest.TestCase):
         })
 
     def tearDown(self):
+        TradingEnv._DATA_CACHE.clear()
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
-        TradingEnv._DATA_CACHE.clear()
 
     def test_missing_columns_recovery(self):
         self.clean_directory()
@@ -70,6 +72,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
         self.clean_directory()
         df_float64 = pd.DataFrame({
             'Close': np.array([100.0, 101.0], dtype=np.float64),
+            'Close_FFD': np.array([0.0, 0.1], dtype=np.float64),
             'RSI': np.array([50.0, 51.0], dtype=np.float64),
             'MACD': np.array([0.0, 0.1], dtype=np.float64),
             'Sentiment_Score': np.array([0.5, 0.6], dtype=np.float64),
@@ -83,7 +86,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
 
         self.assertEqual(len(env.dfs), 1)
         loaded_df = env.dfs[0]
-        required_columns = ['Close', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
+        required_columns = ['Close', 'Close_FFD', 'RSI', 'MACD', 'Sentiment_Score', 'BB_Upper', 'BB_Lower', 'ATR']
         for col in required_columns:
             self.assertEqual(loaded_df[col].dtype, np.float32)
 
