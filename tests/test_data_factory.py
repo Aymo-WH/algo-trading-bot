@@ -3,28 +3,42 @@ from unittest.mock import MagicMock, patch, call
 import os
 import sys
 
-# Add parent directory to path to import data_factory
+# Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock missing dependencies
-sys.modules['numpy'] = MagicMock()
-sys.modules['pandas'] = MagicMock()
-sys.modules['yfinance'] = MagicMock()
-sys.modules['nltk'] = MagicMock()
-sys.modules['nltk.sentiment'] = MagicMock()
-sys.modules['nltk.sentiment.vader'] = MagicMock()
-sys.modules['statsmodels'] = MagicMock()
-sys.modules['statsmodels.tsa'] = MagicMock()
-sys.modules['statsmodels.tsa.stattools'] = MagicMock()
-sys.modules['scipy'] = MagicMock()
-sys.modules['scipy.stats'] = MagicMock()
-sys.modules['sklearn'] = MagicMock()
-sys.modules['sklearn.decomposition'] = MagicMock()
-sys.modules['sklearn.preprocessing'] = MagicMock()
 
-import data_factory
 
 class TestMockSentimentBatch(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mocked_modules = {
+            'numpy': MagicMock(),
+            'pandas': MagicMock(),
+            'yfinance': MagicMock(),
+            'nltk': MagicMock(),
+            'nltk.sentiment': MagicMock(),
+            'nltk.sentiment.vader': MagicMock(),
+            'statsmodels': MagicMock(),
+            'statsmodels.tsa': MagicMock(),
+            'statsmodels.tsa.stattools': MagicMock(),
+            'scipy': MagicMock(),
+            'scipy.stats': MagicMock(),
+            'sklearn': MagicMock(),
+            'sklearn.decomposition': MagicMock(),
+            'sklearn.preprocessing': MagicMock()
+        }
+        cls.patcher = patch.dict('sys.modules', cls.mocked_modules)
+        cls.patcher.start()
+
+        # Import data_factory AFTER mocking
+        global data_factory
+        import data_factory
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patcher.stop()
     def setUp(self):
         # We need to use a local import or re-mock for EACH test to avoid state bleeding
         # because of how we're mocking numpy
