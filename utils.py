@@ -2,16 +2,24 @@ import pandas as pd
 import json
 import os
 
+_CONFIG_CACHE = None
+
 def load_config() -> dict:
     """
     Loads configuration from config.json, returns empty dict if not found.
     """
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is not None:
+        return _CONFIG_CACHE
+
     try:
         # Assuming config.json is in the root directory relative to execution
         with open('config.json', 'r') as f:
-            return json.load(f)
+            _CONFIG_CACHE = json.load(f)
+            return _CONFIG_CACHE
     except FileNotFoundError:
-        return {}
+        _CONFIG_CACHE = {}
+        return _CONFIG_CACHE
 
 def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
