@@ -208,14 +208,17 @@ def fetch_data():
         optimal_d = 1.0
         best_ffd = None
         # Loop d from 0.1 to 0.9 in increments of 0.1
-        for d in np.arange(0.1, 1.0, 0.1):
-            df_ffd = frac_diff_ffd(df[['Close']], d)
-            # dropna is needed because frac diff introduces NaNs at the beginning
-            p_val = adfuller(df_ffd['Close'].dropna())[1]
-            if p_val < 0.05:
-                optimal_d = d
-                best_ffd = df_ffd['Close']
-                break
+                for d in np.arange(0.1, 1.0, 0.1):
+                    df_ffd = frac_diff_ffd(df[['Close']], d)
+                    clean_ffd = df_ffd['Close'].dropna()
+                    
+                    # Safety check: ADF test requires a sufficient number of valid rows (e.g., > 30 days)
+                    if len(clean_ffd) > 30:
+                        p_val = adfuller(clean_ffd)[1]
+                        if p_val < 0.05:
+                            optimal_d = d
+                            best_ffd = df_ffd['Close']
+                            break
 
         if best_ffd is not None:
             print(f"Optimal d for {ticker} found: {optimal_d:.1f}")
