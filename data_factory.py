@@ -73,10 +73,10 @@ def fetch_data():
 
     # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
-    start_date = config.get('start_date', '2018-01-01')
+    start_date = config.get('start_date', '2016-01-01')
     end_date = config.get('end_date', '2026-01-01')
 
-    train_start_date = config.get('train_start_date', '2018-01-01')
+    train_start_date = config.get('train_start_date', '2016-01-01')
     train_end_date = config.get('train_end_date', '2022-12-31')
     test_start_date = config.get('test_start_date', '2023-01-01')
 

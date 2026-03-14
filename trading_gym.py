@@ -191,7 +191,12 @@ class TradingEnv(gym.Env):
         new_price = self._prices[new_decision_idx]
         new_val = self.cash + (self.shares_held * new_price)
         
-        reward = new_val - prev_val
+        daily_return = (new_val - prev_val) / prev_val if prev_val > 0 else 0
+        if daily_return > 0:
+            reward = daily_return * 100
+        else:
+            reward = (daily_return * 100) * 2.5 # Heavy penalty for downside volatility
+        reward -= step_fee # Penalize broker costs
 
         # Check termination
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
