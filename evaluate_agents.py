@@ -9,8 +9,6 @@ import warnings
 import random
 from utils import flatten_multiindex_columns
 
-# Suppress warnings for cleaner output
-warnings.filterwarnings("ignore")
 
 # Configuration
 MODELS_DIR = "models/"
