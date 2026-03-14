@@ -13,6 +13,11 @@ sys.modules['yfinance'] = MagicMock()
 sys.modules['nltk'] = MagicMock()
 sys.modules['nltk.sentiment'] = MagicMock()
 sys.modules['nltk.sentiment.vader'] = MagicMock()
+sys.modules['statsmodels'] = MagicMock()
+sys.modules['statsmodels.tsa'] = MagicMock()
+sys.modules['statsmodels.tsa.stattools'] = MagicMock()
+sys.modules['scipy'] = MagicMock()
+sys.modules['scipy.stats'] = MagicMock()
 
 import data_factory
 
