@@ -9,6 +9,9 @@ import warnings
 import random
 from utils import flatten_multiindex_columns
 
+# Suppress noisy data science warnings without masking critical alerts
+warnings.filterwarnings("ignore", category=FutureWarning)
+pd.options.mode.chained_assignment = None # Suppress SettingWithCopyWarning
 
 # Configuration
 MODELS_DIR = "models/"
