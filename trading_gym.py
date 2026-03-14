@@ -165,7 +165,7 @@ class TradingEnv(gym.Env):
             fee = amount_to_invest * self.transaction_fee_percent
             net_investment = amount_to_invest - fee
             
-            if net_investment > 0:
+            if net_investment > 0 and current_price > 0:
                 shares_bought = net_investment / current_price
                 self.cash -= amount_to_invest
                 self.shares_held += shares_bought
