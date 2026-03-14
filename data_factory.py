@@ -33,26 +33,28 @@ MOCK_HEADLINES = [
 ]
 _MOCK_HEADLINE_SCORES = None
 
-def get_weights(d, size):
-    w = [1.]
-    for k in range(1, size):
+
+def get_weights_ffd(d, thres=1e-4):
+    w, k = [1.], 1
+    while True:
         w_ = -w[-1] / k * (d - k + 1)
+        if abs(w_) < thres:
+            break
         w.append(w_)
+        k += 1
     return np.array(w[::-1]).reshape(-1, 1)
 
-def frac_diff_ffd(series, d, thres=1e-5):
-    w = get_weights(d, series.shape[0])
-    w_ = np.cumsum(abs(w))
-    w_ /= w_[-1]
-    skip = w_[w_ > thres].shape[0]
+def frac_diff_ffd(series, d, thres=1e-4):
+    w = get_weights_ffd(d, thres)
+    width = len(w) - 1
     df = {}
     for name in series.columns:
         seriesF = series[[name]].ffill().dropna()
         df_ = pd.Series(dtype=float, index=seriesF.index)
-        for iloc in range(skip, seriesF.shape[0]):
+        for iloc in range(width, seriesF.shape[0]):
             loc = seriesF.index[iloc]
             if not np.isfinite(series.loc[loc, name]): continue
-            df_.loc[loc] = np.dot(w[-(iloc + 1):, :].T, seriesF.loc[seriesF.index[:iloc + 1], name])[0]
+            df_.loc[loc] = np.dot(w.T, seriesF.loc[seriesF.index[iloc - width : iloc + 1], name])[0]
         df[name] = df_.copy(deep=True)
     return pd.concat(df, axis=1)
 
