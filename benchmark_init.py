@@ -1,5 +1,4 @@
 import time
-import gymnasium as gym
 from trading_gym import TradingEnv
 
 def benchmark_init(n_envs=10):
