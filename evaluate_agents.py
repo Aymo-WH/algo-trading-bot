@@ -48,6 +48,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     profit_list = []
     trades_list = []
     fees_list = []
+    all_daily_returns = []
 
     # Iterate over the pre-defined start steps
     for start_step in start_steps:
@@ -56,6 +57,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         episode_profit = 0.0
         episode_trades = 0
         episode_fees = 0.0
+
+        # Track portfolio value for daily returns
+        prev_portfolio_value = INITIAL_CAPITAL
 
         terminated = False
         truncated = False
@@ -80,6 +84,12 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
             # Accumulate reward
             episode_profit += reward
+
+            # Calculate daily return for this step
+            current_portfolio_value = INITIAL_CAPITAL + episode_profit
+            daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value if prev_portfolio_value > 0 else 0
+            all_daily_returns.append(daily_return)
+            prev_portfolio_value = current_portfolio_value
 
             obs = next_obs
 
@@ -114,8 +124,31 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         "Trades": total_trades,
         "Fees": total_fees,
         "Start Date": df['Date'].iloc[start_steps[0]], # Representative
-        "End Date": df['Date'].iloc[-1]
+        "End Date": df['Date'].iloc[-1],
+        "daily_returns": all_daily_returns
     }
+
+def evaluate_model(dqn_model, ppo_model, ticker):
+    import os
+
+    # Load specific dataframe
+    data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Data for {ticker} not found in {DATA_DIR}")
+
+    df = pd.read_csv(data_path)
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+
+    # Evaluate on a single chronological block from the beginning
+    steps = [0]
+
+    meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
+
+    # Run Evaluation
+    metrics = evaluate_model_on_stock(meta_agent, df, ticker, False, steps)
+
+    return None, None, metrics["daily_returns"]
 
 def get_benchmark_sp500(start_date, end_date, sp500_df=None):
     # Fetch S&P 500 data

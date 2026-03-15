@@ -103,3 +103,58 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def train_dqn(ticker, total_timesteps=10000, **kwargs):
+    # Determine learning rate and target update interval from kwargs
+    learning_rate = kwargs.get('dqn_lr', 1e-4)
+    target_update_interval = kwargs.get('dqn_target_update', 1000)
+
+    # DQN requires discrete actions
+    is_discrete = True
+
+    # Check if a specific file exists, if so load that file, else pass data_dir
+    data_dir = "data/train/"
+    # Ideally we should pass a specific dataframe, but for simplicity, we pass data_dir
+    # However, memory mentions: "train_agent.py acts as the unified training script... defaults to 50,000 timesteps...".
+    # And we know TradingEnv loads all *_data.csv in data_dir by default.
+    # To train on a specific ticker, we should pass its dataframe.
+    import pandas as pd
+    import os
+
+    ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
+    if os.path.exists(ticker_file):
+        df = pd.read_csv(ticker_file)
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'])
+        env = TradingEnv(df=df, is_discrete=is_discrete)
+    else:
+        # Fallback to loading all if specific ticker file not found (though unexpected)
+        env = TradingEnv(is_discrete=is_discrete, data_dir=data_dir)
+
+    model = DQN("MlpPolicy", env, verbose=0, learning_rate=learning_rate, target_update_interval=target_update_interval)
+    model.learn(total_timesteps=total_timesteps)
+    return model
+
+def train_ppo(ticker, total_timesteps=10000, **kwargs):
+    learning_rate = kwargs.get('ppo_lr', 3e-4)
+    clip_range = kwargs.get('ppo_clip', 0.2)
+    ent_coef = kwargs.get('ppo_ent', 0.0)
+
+    is_discrete = False
+    data_dir = "data/train/"
+    import pandas as pd
+    import os
+
+    ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
+    if os.path.exists(ticker_file):
+        df = pd.read_csv(ticker_file)
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'])
+        # Single environment for simplicity in optimization wrapper
+        env = TradingEnv(df=df, is_discrete=is_discrete)
+    else:
+        env = TradingEnv(is_discrete=is_discrete, data_dir=data_dir)
+
+    model = PPO("MlpPolicy", env, verbose=0, learning_rate=learning_rate, clip_range=clip_range, ent_coef=ent_coef)
+    model.learn(total_timesteps=total_timesteps)
+    return model
