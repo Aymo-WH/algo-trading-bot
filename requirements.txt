@@ -6,3 +6,4 @@ shimmy
 numpy
 nltk
 gradio
+optuna
