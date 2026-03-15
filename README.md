@@ -1,55 +1,22 @@
-# 📈 Quantitative RL Trading Laboratory 
+# 🤖 Quantitative AI Trading Architecture (Meta-Labeling)
 
-An institutional-grade algorithmic trading framework built on Reinforcement Learning (Stable-Baselines3) and custom Gymnasium environments. This repository implements advanced quantitative finance methodologies derived from Marcos López de Prado's *Advances in Financial Machine Learning*.
+This repository implements an institutional-grade algorithmic trading pipeline based on the frameworks of Marcos López de Prado. It moves beyond standard retail technical analysis by employing stationarity transformations, mathematical orthogonalization, and secondary meta-labeling.
 
----
+## 🏛️ System Architecture
 
-## 🧠 System Architecture
+### 1. Data Ingestion & Transformation
+* **Fractional Differentiation (FFD):** Raw price series are made stationary without sacrificing memory. We use an expanding fixed-width window, optimizing the $d^*$ coefficient via Augmented Dickey-Fuller tests.
+* **Orthogonalization:** Correlated technical indicators (RSI, MACD, Bollinger Bands) are compressed using strictly point-in-time Principal Component Analysis (PCA) to prevent the "Substitution Effect" and Look-Ahead Bias.
 
-Unlike standard "retail" trading bots that rely on raw price action and fixed-time horizons, this laboratory utilizes a robust, statistically sound pipeline to generate purely algorithmic Alpha.
+### 2. The Meta-Agent (Dual Brain System)
+* **Primary Model (Signal Generation):** A Deep Q-Network (DQN) analyzes the orthogonalized state to generate strict discrete signals (Long, Short, Veto). 
+* **Secondary Model (Meta-Labeling):** A Proximal Policy Optimization (PPO) agent acts as a bet-sizer. It evaluates the probability of the DQN's success. The continuous output is transformed via a z-score and standard Normal CDF ($m = 2Z[z] - 1$) to generate a mathematical conviction level.
+* **Size Discretization:** The continuous conviction is passed through a step-function to prevent micro-rebalancing jitter.
 
-### Core Technologies
-- **Environment:** Custom Vectorized `trading_gym.py` (OpenAI Gymnasium) optimized for $O(1)$ ring-buffer memory execution.
-- **Brain 1 (Directional Signal):** Deep Q-Network (DQN) for discrete regime identification.
-- **Brain 2 (Meta-Labeling / Risk Sizing):** Proximal Policy Optimization (PPO) for continuous probability-based bet sizing.
-- **Data Engine:** Asynchronous Yahoo Finance ingestion with automated caching.
+### 3. Institutional Execution & Validation
+* **The ETF Trick:** The Gym environment tracks a theoretical $1 invested ($K_t$), cleanly separating mark-to-market performance from transaction costs (treated as a negative dividend) to prevent fictitious compounded returns.
+* **Purged & Embargoed Cross-Validation:** The MDP transitions enforce strict 1% embargo boundaries and purge overlapping labels to prevent serial correlation leakage during Reinforcement Learning.
 
----
-
-## 🔬 Advanced Quantitative Methodologies
-
-This project actively implements the following institutional mechanisms:
-
-- **Fractional Differentiation (FFD):** Transforming non-stationary price data into stationary series while preserving maximum historical memory (optimizing the $d^*$ coefficient via Augmented Dickey-Fuller testing).
-- **The Triple-Barrier Method:** Path-dependent dynamic reward horizons scaling with historical volatility (ATR) to mimic real-world stop-loss and profit-taking mechanics.
-- **Orthogonal Feature Processing:** Utilizing Principal Component Analysis (PCA) to eliminate the "Substitution Effect" caused by collinear technical indicators (MACD, RSI).
-- **Meta-Labeling with Size Discretization:** Separating the directional signal (Long/Short) from the bet sizing. The continuous bet size is calculated via the Normal CDF of the classification $z$-score and discretized into a step-function to eliminate micro-rebalancing fees.
-- **Purged Walk-Forward Cross Validation:** Eliminating Look-Ahead bias and serial correlation leakage by enforcing strict embargoes between training and testing folds.
-- **Deflated Sharpe Ratio (DSR):** Logging the variance of all failed training iterations to calculate the Probability of Backtest Overfitting (PBO), ensuring out-of-sample performance is statistically significant.
-
----
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-2. Train the Agents
-
-```Bash
-python train_agent.py --data_dir ./data --save_path ./models
-```
-
-3. Evaluate the Deflated Sharpe Ratio
-
-```Bash
-python evaluate_agents.py
-```
-
-⚠️ Disclaimer
-This repository is an academic and mathematical research laboratory. It does not constitute financial advice. The models herein are experimental and intended for quantitative research only.
-
-
-***
+## 🚀 Future Roadmap
+* Information-Driven Bars (Volume/Dollar) via high-frequency tick data.
+* Combinatorially Symmetric Cross-Validation (CSCV) for Probability of Backtest Overfitting (PBO) reporting.
