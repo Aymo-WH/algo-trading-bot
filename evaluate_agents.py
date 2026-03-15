@@ -9,6 +9,7 @@ import os
 import warnings
 import random
 from utils import flatten_multiindex_columns
+from pbo_validator import PBOValidator
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -322,7 +323,33 @@ def main():
                 "vs B&H ROI (%)": round(metrics["ROI"] - bh_roi, 2),
                 "vs SP500 ROI (%)": round(metrics["ROI"] - sp500_roi, 2)
             })
-
+    # === CALCULATE PROBABILITY OF BACKTEST OVERFITTING (PBO) ===
+    print("\\nCalculating Combinatorially Symmetric Cross-Validation (CSCV) for PBO...")
+    try:
+        # Extract just the ROI (%) values for the meta_agent across the 5 evaluation windows
+        meta_results = [r['ROI (%)'] for r in results if r['Agent'] == 'meta_agent']
+        
+        if len(meta_results) >= 4:
+            # Mock a TxN matrix for the validator using our evaluation trial results
+            # In a full deployment, this would be thousands of backtest paths. 
+            # Here we use our randomized evaluation windows as a proxy.
+            performance_matrix = pd.DataFrame({'Trial_1': meta_results})
+            
+            # We use S=4 partitions for our small sample size
+            validator = PBOValidator(performance_matrix, num_partitions=4)
+            pbo_score, _ = validator.calculate_pbo()
+            
+            print(f"✅ Probability of Backtest Overfitting (PBO): {pbo_score * 100:.2f}%")
+            if pbo_score < 0.05:
+                print("   Status: PASSED (Statistically Significant)")
+            else:
+                print("   Status: WARNING (High Risk of Overfitting)")
+        else:
+            print("Not enough MetaAgent trials to calculate PBO.")
+    except Exception as e:
+        print(f"PBO Calculation Failed: {e}")
+    # ==========================================================
+    
     # Create DataFrame
     results_df = pd.DataFrame(results)
 
