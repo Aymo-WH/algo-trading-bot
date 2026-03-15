@@ -3,6 +3,7 @@ import numpy as np
 import yfinance as yf
 from stable_baselines3 import PPO, DQN
 from trading_gym import TradingEnv
+from meta_agent import MetaAgent
 import glob
 import os
 import warnings
@@ -257,19 +258,36 @@ def main():
         stock_sp500_benchmarks[stock_name] = (np.mean(sp_rois), np.mean(sp_cagrs))
 
 
+    # Load Standalone Models
+    models_to_eval = {}
     for model_path in model_files:
         model_name = os.path.basename(model_path).replace(".zip", "")
-        # print(f"Evaluating Model: {model_name}")
-
         try:
             model = load_agent(model_path)
+            models_to_eval[model_name] = model
         except Exception as e:
             print(f"Failed to load {model_name}: {e}")
             continue
 
+    # Load and Instantiate MetaAgent if both DQN and PPO are present
+    dqn_model = next((m for name, m in models_to_eval.items() if "dqn" in name.lower()), None)
+    ppo_model = next((m for name, m in models_to_eval.items() if "ppo" in name.lower()), None)
+
+    if dqn_model and ppo_model:
+        meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
+        models_to_eval["meta_agent"] = meta_agent
+
+    for model_name, model in models_to_eval.items():
+        # print(f"Evaluating Model: {model_name}")
+
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
-            is_discrete = "dqn" in model_name.lower()
+
+            # MetaAgent and PPO use continuous env, DQN uses discrete
+            if model_name == "meta_agent":
+                is_discrete = False
+            else:
+                is_discrete = "dqn" in model_name.lower()
 
             # Run Evaluation
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
