@@ -1,8 +1,7 @@
 import sys
 from unittest.mock import MagicMock, patch, mock_open
 
-# Mock pandas
-sys.modules['pandas'] = MagicMock()
+
 
 import unittest
 import utils

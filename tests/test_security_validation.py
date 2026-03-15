@@ -71,14 +71,14 @@ class TestTradingEnvSecurity(unittest.TestCase):
     def test_type_conversion(self):
         self.clean_directory()
         df_float64 = pd.DataFrame({
-            'Close': np.array([100.0, 101.0], dtype=np.float64),
-            'Close_FFD': np.array([0.0, 0.1], dtype=np.float64),
-            'Sentiment_Score': np.array([0.5, 0.6], dtype=np.float64),
-            'PCA_1': np.array([50.0, 51.0], dtype=np.float64),
-            'PCA_2': np.array([0.0, 0.1], dtype=np.float64),
-            'PCA_3': np.array([110.0, 111.0], dtype=np.float64),
-            'PCA_4': np.array([90.0, 91.0], dtype=np.float64),
-            'PCA_5': np.array([1.0, 1.1], dtype=np.float64)
+            'Close': np.array([100.0] * 12, dtype=np.float64),
+            'Close_FFD': np.array([0.0] * 12, dtype=np.float64),
+            'Sentiment_Score': np.array([0.5] * 12, dtype=np.float64),
+            'PCA_1': np.array([50.0] * 12, dtype=np.float64),
+            'PCA_2': np.array([0.0] * 12, dtype=np.float64),
+            'PCA_3': np.array([110.0] * 12, dtype=np.float64),
+            'PCA_4': np.array([90.0] * 12, dtype=np.float64),
+            'PCA_5': np.array([1.0] * 12, dtype=np.float64)
         })
         df_float64.to_csv(os.path.join(self.test_dir, 'float64_data.csv'), index=False)
 
