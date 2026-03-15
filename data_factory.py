@@ -233,20 +233,28 @@ def fetch_data():
 
         tech_cols = ['RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'ATR']
         
-        # Apply PCA
-        clean_idx = df[tech_cols].dropna().index
+        # Apply PCA (STRICTLY POINT-IN-TIME TO PREVENT LOOK-AHEAD BIAS)
+        all_clean_idx = df[tech_cols].dropna().index
+        train_clean_idx = df[(df.index < '2023-01-01')][tech_cols].dropna().index
+
         scaler = StandardScaler()
-        scaled_tech = scaler.fit_transform(df.loc[clean_idx, tech_cols])
+        # FIT ONLY ON TRAIN
+        scaler.fit(df.loc[train_clean_idx, tech_cols])
+        # TRANSFORM ALL
+        scaled_tech = scaler.transform(df.loc[all_clean_idx, tech_cols])
         
         pca = PCA(n_components=5)
-        pca_features = pca.fit_transform(scaled_tech)
+        # FIT ONLY ON TRAIN SCALED DATA
+        scaled_train_tech = scaler.transform(df.loc[train_clean_idx, tech_cols])
+        pca.fit(scaled_train_tech)
+        # TRANSFORM ALL
+        pca_features = pca.transform(scaled_tech)
+
         pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
         
         # BULLETPROOF PANDAS ASSIGNMENT
-        df_pca = pd.DataFrame(pca_features, index=clean_idx, columns=pca_cols)
+        df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
         df = pd.concat([df, df_pca], axis=1)
-        
-        # Drop the old highly-correlated columns
         df.drop(columns=tech_cols, inplace=True)
 
         # Drop NaN rows
