@@ -7,6 +7,10 @@ class MetaAgent:
         self.ppo = ppo_model
         self.step_size = step_size
 
+        # Add missing attributes expected by Stable-Baselines3 evaluators
+        self.observation_space = dqn_model.observation_space
+        self.action_space = ppo_model.action_space
+
     def predict(self, obs, deterministic=True):
         # 1. Primary Model (DQN) - Signal Generation
         dqn_act, _ = self.dqn.predict(obs, deterministic=deterministic)
