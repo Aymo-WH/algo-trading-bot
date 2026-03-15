@@ -5,3 +5,4 @@ stable-baselines3
 shimmy
 numpy
 nltk
+gradio
