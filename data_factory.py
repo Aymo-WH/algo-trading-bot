@@ -260,15 +260,19 @@ def fetch_data():
         # Drop NaN rows
         df = df.dropna()
 
-        # Split Data
+        # Split Data with 1% Embargo
         try:
-            # Slicing with .loc using strings works if the index is DatetimeIndex or strings.
-            # yfinance returns DatetimeIndex, so string slicing is supported.
             train_df = df.loc[train_start_date:train_end_date]
-            test_df = df.loc[test_start_date:]
-
+            raw_test_df = df.loc[test_start_date:]
+            
+            # IMPLEMENT 1% EMBARGO (Drop first 1% of Test Set to prevent MACD/BB leakage)
+            embargo_size = int(len(df) * 0.01)
+            if len(raw_test_df) > embargo_size:
+                test_df = raw_test_df.iloc[embargo_size:]
+            else:
+                test_df = raw_test_df # Fallback if test set is too small
+                
             # Save to CSV
-            # USE CLEAN TICKER HERE
             train_file = f'data/train/{clean_ticker}_data.csv'
             train_df.to_csv(train_file)
             print(f"Train data saved to {train_file}")
