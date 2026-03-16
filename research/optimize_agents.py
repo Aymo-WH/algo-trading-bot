@@ -1,6 +1,10 @@
 import optuna
 import pandas as pd
 import numpy as np
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
 from pbo_validator import PBOValidator
