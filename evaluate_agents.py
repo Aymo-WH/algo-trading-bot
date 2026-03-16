@@ -181,18 +181,6 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
         print(f"Error fetching S&P 500: {e}")
         return 0.0, 0.0
 
-def get_buy_and_hold(df):
-    start_price = df['Close'].iloc[0]
-    end_price = df['Close'].iloc[-1]
-
-    roi = ((end_price - start_price) / start_price) * 100
-
-    start_date = pd.to_datetime(df['Date'].iloc[0])
-    end_date = pd.to_datetime(df['Date'].iloc[-1])
-    cagr = calculate_cagr(start_price, end_price, start_date, end_date) * 100
-
-    return roi, cagr
-
 def main():
     print("Starting Evaluation...")
 
