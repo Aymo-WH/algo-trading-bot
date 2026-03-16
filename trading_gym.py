@@ -110,8 +110,6 @@ class TradingEnv(gym.Env):
         self.episode_length = 90
 
         # Triple Barrier Parameters
-        self.pt_mult = 2.0  # Profit-Taking ATR multiplier
-        self.sl_mult = 2.0  # Stop-Loss ATR multiplier
         self.max_holding_bars = 15  # Vertical Time Barrier
 
         # Trade State Tracking
@@ -166,11 +164,14 @@ class TradingEnv(gym.Env):
             # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
             current_atr = self.df['ATR'].iloc[decision_idx] if 'ATR' in self.df.columns else current_price * 0.02
 
+            current_pt_mult = self.df['Optimal_PT'].iloc[decision_idx] if 'Optimal_PT' in self.df.columns else 2.0
+            current_sl_mult = self.df['Optimal_SL'].iloc[decision_idx] if 'Optimal_SL' in self.df.columns else 2.0
+
             forced_sell = False
             if self.shares_held > 0 and self.entry_price > 0:
                 bars_held = self.current_step - self.entry_step
-                upper_barrier = self.entry_price + (self.entry_atr * self.pt_mult)
-                lower_barrier = self.entry_price - (self.entry_atr * self.sl_mult)
+                upper_barrier = self.entry_price + (self.entry_atr * current_pt_mult)
+                lower_barrier = self.entry_price - (self.entry_atr * current_sl_mult)
 
                 if current_price >= upper_barrier:  # Take Profit (Upper Barrier)
                     forced_sell = True
