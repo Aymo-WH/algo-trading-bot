@@ -312,7 +312,12 @@ def fetch_data():
         
         # Apply PCA (STRICTLY POINT-IN-TIME TO PREVENT LOOK-AHEAD BIAS)
         all_clean_idx = df[tech_cols].dropna().index
-        train_clean_idx = df[(df.index < '2023-01-01')][tech_cols].dropna().index
+
+        # Dynamically calculate the 80% split date
+        split_idx = int(len(df) * 0.8)
+        split_date = df.index[split_idx]
+
+        train_clean_idx = df[(df.index < split_date)][tech_cols].dropna().index
 
         scaler = StandardScaler()
         # FIT ONLY ON TRAIN
@@ -339,8 +344,8 @@ def fetch_data():
 
         # Split Data with 1% Embargo
         try:
-            train_df = df.loc[train_start_date:train_end_date]
-            raw_test_df = df.loc[test_start_date:]
+            train_df = df[df.index < split_date]
+            raw_test_df = df[df.index >= split_date]
             
             # IMPLEMENT 1% EMBARGO (Drop first 1% of Test Set to prevent MACD/BB leakage)
             embargo_size = int(len(df) * 0.01)
