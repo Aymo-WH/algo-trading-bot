@@ -11,6 +11,7 @@ import re
 from utils import load_config
 from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
+from optimize_barriers import get_rolling_barriers
 
 MOCK_HEADLINES = [
     "Company reports record earnings.",
@@ -201,6 +202,11 @@ def fetch_data():
         low_close = (df['Low'] - df['Close'].shift()).abs()
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         df['ATR'] = tr.rolling(window=14).mean()
+
+        print(f"Calculating Dynamic Barriers for {ticker}...")
+        barriers_df = get_rolling_barriers(df['Close'], window=60, step=20)
+        df['Optimal_PT'] = barriers_df['Optimal_PT'].fillna(2.0)
+        df['Optimal_SL'] = barriers_df['Optimal_SL'].fillna(2.0)
 
         # Add Simulated Sentiment
         print(f"Calculating Simulated Sentiment for {ticker}...")
