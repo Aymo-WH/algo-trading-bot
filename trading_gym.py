@@ -109,6 +109,16 @@ class TradingEnv(gym.Env):
         self.current_step = 0
         self.episode_length = 90
 
+        # Triple Barrier Parameters
+        self.pt_mult = 2.0  # Profit-Taking ATR multiplier
+        self.sl_mult = 2.0  # Stop-Loss ATR multiplier
+        self.max_holding_bars = 15  # Vertical Time Barrier
+
+        # Trade State Tracking
+        self.entry_price = 0.0
+        self.entry_step = 0
+        self.entry_atr = 0.0
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
@@ -128,6 +138,10 @@ class TradingEnv(gym.Env):
         self.start_step = self.current_step
         self.cash = self.initial_balance
         self.shares_held = 0
+
+        self.entry_price = 0.0
+        self.entry_step = 0
+        self.entry_atr = 0.0
 
         # Explicit resets requested
         self.balance = 10000.0
@@ -149,6 +163,29 @@ class TradingEnv(gym.Env):
             decision_idx = self.current_step + self.window_size - 1
             current_price = self._prices[decision_idx]
             
+            # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
+            current_atr = self.df['ATR'].iloc[decision_idx] if 'ATR' in self.df.columns else current_price * 0.02
+
+            forced_sell = False
+            if self.shares_held > 0 and self.entry_price > 0:
+                bars_held = self.current_step - self.entry_step
+                upper_barrier = self.entry_price + (self.entry_atr * self.pt_mult)
+                lower_barrier = self.entry_price - (self.entry_atr * self.sl_mult)
+
+                if current_price >= upper_barrier:  # Take Profit (Upper Barrier)
+                    forced_sell = True
+                elif current_price <= lower_barrier:  # Stop Loss (Lower Barrier)
+                    forced_sell = True
+                elif bars_held >= self.max_holding_bars:  # Time Limit (Vertical Barrier)
+                    forced_sell = True
+
+            # Override action to force a 100% sell if a barrier is breached
+            if forced_sell:
+                if self.is_discrete:
+                    action = 0  # Assuming 0 maps to -1.0 in your mapping dict
+                else:
+                    action = np.array([-1.0])
+
             # ETF TRICK: Track pure mark-to-market before rebalancing
             prev_val = self.cash + (self.shares_held * current_price)
             
@@ -171,6 +208,11 @@ class TradingEnv(gym.Env):
                     self.cash -= amount_to_invest
                     self.shares_held += shares_bought
                     
+                    if self.entry_price == 0.0:  # Only set on initial entry, not scaling in
+                        self.entry_price = current_price
+                        self.entry_step = self.current_step
+                        self.entry_atr = current_atr
+
             elif act < 0: 
                 fraction = abs(act)
                 shares_sold = self.shares_held * fraction
@@ -180,6 +222,12 @@ class TradingEnv(gym.Env):
                 
                 self.cash += net_proceeds
                 self.shares_held -= shares_sold
+
+                if self.shares_held <= 1e-6: # Account for float precision
+                    self.shares_held = 0.0
+                    self.entry_price = 0.0
+                    self.entry_step = 0
+                    self.entry_atr = 0.0
     
             self.current_step += 1
     
