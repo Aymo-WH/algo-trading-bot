@@ -48,15 +48,26 @@ def get_weights_ffd(d, thres=1e-4):
 def frac_diff_ffd(series, d, thres=1e-4):
     w = get_weights_ffd(d, thres)
     width = len(w) - 1
+    # get_weights_ffd returns weights in reversed order [w_k, ..., w_0]
+    # For FFD calculation we need the natural order [w_0, ..., w_k] for convolution
+    w_natural = w.flatten()[::-1]
     df = {}
     for name in series.columns:
-        seriesF = series[[name]].ffill().dropna()
-        df_ = pd.Series(dtype=float, index=seriesF.index)
-        for iloc in range(width, seriesF.shape[0]):
-            loc = seriesF.index[iloc]
-            if not np.isfinite(series.loc[loc, name]): continue
-            df_.loc[loc] = np.dot(w.T, seriesF.loc[seriesF.index[iloc - width : iloc + 1], name])[0]
-        df[name] = df_.copy(deep=True)
+        seriesF = series[name].ffill().dropna()
+        f_values = seriesF.values
+        f_index = seriesF.index
+
+        results = np.full(len(f_values), np.nan)
+        if len(f_values) > width:
+            # Use fast convolution to replace iterative dot products
+            conv = np.convolve(f_values, w_natural, mode='valid')
+            results[width:] = conv
+
+            # Mask results where the original series had non-finite values (matching original behavior)
+            is_finite = np.isfinite(series[name].loc[f_index].values)
+            results[~is_finite] = np.nan
+
+        df[name] = pd.Series(results, index=f_index)
     return pd.concat(df, axis=1)
 
 def download_nltk_data():
