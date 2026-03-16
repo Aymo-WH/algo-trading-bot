@@ -10,3 +10,4 @@ This repository implements an advanced algorithmic trading pipeline moving beyon
 * **Meta-Labeling:** A Deep Q-Network (DQN) generates directional signals, while a Proximal Policy Optimization (PPO) agent predicts the probability of success, sizing the bet using the standard Normal CDF ($m = 2Z[z] - 1$).
 * **Institutional Execution:** The Gym environment implements the **ETF Trick** (deducting fees as negative dividends) and the **Triple-Barrier Method** (dynamic Take-Profit, Stop-Loss, and Time Limits).
 * **Optuna Alpha Search & PBO Validator:** Hyperparameters are optimized via Randomized Search. The chronological out-of-sample paths of all tested configurations are saved into a $T \times N$ matrix to calculate the Probability of Backtest Overfitting (PBO).
+* **Research & Optimization:** Laboratory tools (benchmark and optimization scripts) are located in the `research/` directory.
