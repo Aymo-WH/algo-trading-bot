@@ -101,6 +101,60 @@ def get_mock_sentiment(sia):
     score += random.uniform(-0.1, 0.1)
     return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
 
+def construct_dollar_bars(df, target_bars_per_day=10):
+    df = df.copy()
+
+    # Calculate 'Dollar Volume'
+    df['Dollar_Volume'] = df['Close'] * df['Volume']
+
+    # Calculate dynamic threshold (M):
+    # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by target
+    M = df['Dollar_Volume'].rolling(window=210).sum() / (30 * target_bars_per_day)
+
+    # Fill NaNs with the expanding mean
+    M = M.fillna(df['Dollar_Volume'].expanding().mean() * 7 / target_bars_per_day)
+
+    bars = []
+    cum_dv = 0
+    current_bar_open = None
+    current_bar_high = -np.inf
+    current_bar_low = np.inf
+    current_bar_vol = 0
+
+    for idx, row in df.iterrows():
+        if current_bar_open is None:
+            current_bar_open = row['Open']
+
+        current_bar_high = max(current_bar_high, row['High'])
+        current_bar_low = min(current_bar_low, row['Low'])
+        current_bar_vol += row['Volume']
+
+        cum_dv += row['Dollar_Volume']
+
+        threshold = M.loc[idx]
+
+        if cum_dv >= threshold:
+            bars.append({
+                'Date': idx,
+                'Open': current_bar_open,
+                'High': current_bar_high,
+                'Low': current_bar_low,
+                'Close': row['Close'],
+                'Volume': current_bar_vol
+            })
+
+            # Reset the cumulative sum to 0
+            cum_dv = 0
+            current_bar_open = None
+            current_bar_high = -np.inf
+            current_bar_low = np.inf
+            current_bar_vol = 0
+
+    dollar_df = pd.DataFrame(bars)
+    if not dollar_df.empty:
+        dollar_df.set_index('Date', inplace=True)
+    return dollar_df
+
 def fetch_data():
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
@@ -114,17 +168,15 @@ def fetch_data():
 
     # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
-    start_date = config.get('start_date', '2016-01-01')
-    end_date = config.get('end_date', '2026-01-01')
 
     train_start_date = config.get('train_start_date', '2016-01-01')
     train_end_date = config.get('train_end_date', '2022-12-31')
     test_start_date = config.get('test_start_date', '2023-01-01')
 
-    print(f"Fetching data for {tickers} from {start_date} to {end_date}...")
+    print(f"Fetching intraday data for {tickers}...")
     try:
         # Fetch data for all tickers at once
-        data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
+        data = yf.download(tickers, period='730d', interval='1h', group_by='ticker')
     except Exception as e:
         print(f"Error fetching data: {e}")
         return
@@ -170,6 +222,14 @@ def fetch_data():
         # Ensure 'Close' column exists
         if 'Close' not in df.columns:
             print(f"Error: 'Close' column not found in dataframe for {ticker}. Columns: {df.columns}")
+            continue
+
+        # Make index tz-naive and compress to Dollar Bars
+        df.index = df.index.tz_localize(None)
+        df = construct_dollar_bars(df)
+
+        if df.empty:
+            print(f"Not enough data to construct Dollar Bars for {ticker}.")
             continue
 
         # Calculate RSI (14-day)
