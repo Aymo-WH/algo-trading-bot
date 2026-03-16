@@ -1,9 +1,13 @@
 import unittest
-import pandas as pd
-import numpy as np
+import sys
+
+# Remove the bad mocks that broke actual test logic: test_security_validation actually relies on pandas and numpy
+
 import os
 import shutil
 from trading_gym import TradingEnv
+import pandas as pd
+import numpy as np
 
 class TestTradingEnvSecurity(unittest.TestCase):
     def clean_directory(self):

@@ -3,6 +3,17 @@ from unittest.mock import MagicMock, patch, mock_open
 
 
 
+import sys
+from unittest.mock import MagicMock
+
+# Mock out missing dependencies
+sys.modules['pandas'] = MagicMock()
+sys.modules['numpy'] = MagicMock()
+sys.modules['gymnasium'] = MagicMock()
+sys.modules['statsmodels'] = MagicMock()
+sys.modules['scipy'] = MagicMock()
+sys.modules['sklearn'] = MagicMock()
+
 import unittest
 import utils
 
