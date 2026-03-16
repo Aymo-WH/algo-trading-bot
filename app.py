@@ -1,5 +1,10 @@
 import gradio as gr
 import pandas as pd
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import evaluate_agents
 
 with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
     gr.Markdown("# 🤖 Quantitative AI Trading Dashboard - Portfolio Oversight")
