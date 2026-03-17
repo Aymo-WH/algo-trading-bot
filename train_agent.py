@@ -1,5 +1,6 @@
 import argparse
 import os
+import pandas as pd
 from trading_gym import TradingEnv
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
@@ -118,8 +119,6 @@ def train_dqn(ticker, total_timesteps=10000, **kwargs):
     # However, memory mentions: "train_agent.py acts as the unified training script... defaults to 50,000 timesteps...".
     # And we know TradingEnv loads all *_data.csv in data_dir by default.
     # To train on a specific ticker, we should pass its dataframe.
-    import pandas as pd
-    import os
 
     ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
     if os.path.exists(ticker_file):
@@ -142,8 +141,6 @@ def train_ppo(ticker, total_timesteps=10000, **kwargs):
 
     is_discrete = False
     data_dir = "data/train/"
-    import pandas as pd
-    import os
 
     ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
     if os.path.exists(ticker_file):
