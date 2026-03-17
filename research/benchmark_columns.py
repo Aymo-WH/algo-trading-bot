@@ -1,5 +1,4 @@
 import timeit
-import pandas as pd
 
 setup = """
 import pandas as pd
