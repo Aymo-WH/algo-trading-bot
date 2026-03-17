@@ -59,9 +59,13 @@ def run_optimization(n_trials=20, timesteps=10000):
     print(f"✅ True Probability of Backtest Overfitting (PBO): {pbo_score * 100:.2f}%")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Optimize agents")
-    parser.add_argument("--trials", type=int, default=10, help="Number of trials")
-    parser.add_argument("--timesteps", type=int, default=10000, help="Total timesteps")
-    args = parser.parse_args()
+    print("🧠 Welcome to the Alpha Search Engine")
+    try:
+        user_trials = int(input("Enter number of Optuna trials (e.g., 50): "))
+        user_timesteps = int(input("Enter RL timesteps per trial (e.g., 50000): "))
+    except ValueError:
+        print("Invalid input. Defaulting to 10 trials / 10000 timesteps.")
+        user_trials, user_timesteps = 10, 10000
 
-    run_optimization(n_trials=args.trials, timesteps=args.timesteps)
+    # Ensure run_optimization passes user_timesteps down to the train_dqn/train_ppo functions
+    run_optimization(n_trials=user_trials, timesteps=user_timesteps)

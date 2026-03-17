@@ -98,11 +98,11 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     df['Dollar_Volume'] = df['Close'] * df['Volume']
 
     # Calculate dynamic threshold (M):
-    # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by target
-    M = df['Dollar_Volume'].rolling(window=210).sum() / (30 * target_bars_per_day)
+    # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by 10
+    M = df['Dollar_Volume'].rolling(window=210).sum() / 10
 
-    # Fill NaNs with the expanding mean
-    M = M.fillna(df['Dollar_Volume'].expanding().mean() * 7 / target_bars_per_day)
+    # Forward-fill/backward-fill NaNs
+    M = M.ffill().bfill()
 
     bars = []
     cum_dv = 0
@@ -158,10 +158,6 @@ def fetch_data():
 
     # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
-
-    train_start_date = config.get('train_start_date', '2016-01-01')
-    train_end_date = config.get('train_end_date', '2022-12-31')
-    test_start_date = config.get('test_start_date', '2023-01-01')
 
     print(f"Fetching intraday data for {tickers}...")
     try:
