@@ -1,3 +1,4 @@
+import argparse
 import optuna
 import pandas as pd
 import numpy as np
@@ -12,7 +13,7 @@ from pbo_validator import PBOValidator
 # Global matrix to store the out-of-sample return series for every trial
 TRIAL_RETURNS_MATRIX = {}
 
-def objective(trial):
+def objective(trial, timesteps):
     # 1. Sample Hyperparameters using Log-Uniform distributions
     dqn_lr = trial.suggest_float("dqn_lr", 1e-5, 1e-3, log=True)
     dqn_target_update = trial.suggest_int("dqn_target_update", 1000, 10000)
@@ -25,8 +26,8 @@ def objective(trial):
 
     # 2. Train Models with these specific hyperparameters (shortened timesteps for search speed)
     # Note: In a real architecture, train_dqn and train_ppo need to accept kwargs
-    dqn_model = train_dqn(ticker='AAPL', total_timesteps=10000, dqn_lr=dqn_lr, dqn_target_update=dqn_target_update)
-    ppo_model = train_ppo(ticker='AAPL', total_timesteps=10000, ppo_lr=ppo_lr, ppo_clip=ppo_clip, ppo_ent=ppo_ent)
+    dqn_model = train_dqn(ticker='AAPL', total_timesteps=timesteps, dqn_lr=dqn_lr, dqn_target_update=dqn_target_update)
+    ppo_model = train_ppo(ticker='AAPL', total_timesteps=timesteps, ppo_lr=ppo_lr, ppo_clip=ppo_clip, ppo_ent=ppo_ent)
 
     # 3. Evaluate Out-Of-Sample
     # evaluate_model must return the chronological sequence of portfolio returns
@@ -41,9 +42,9 @@ def objective(trial):
     sharpe = np.mean(oos_returns) / np.std(oos_returns)
     return sharpe
 
-def run_optimization(n_trials=20):
+def run_optimization(n_trials=20, timesteps=10000):
     study = optuna.create_study(direction="maximize", sampler=optuna.samplers.RandomSampler())
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(lambda trial: objective(trial, timesteps), n_trials=n_trials)
 
     print("\nBest Hyperparameters:", study.best_params)
 
@@ -58,4 +59,9 @@ def run_optimization(n_trials=20):
     print(f"✅ True Probability of Backtest Overfitting (PBO): {pbo_score * 100:.2f}%")
 
 if __name__ == "__main__":
-    run_optimization(n_trials=10) # Set low for initial testing
+    parser = argparse.ArgumentParser(description="Optimize agents")
+    parser.add_argument("--trials", type=int, default=10, help="Number of trials")
+    parser.add_argument("--timesteps", type=int, default=10000, help="Total timesteps")
+    args = parser.parse_args()
+
+    run_optimization(n_trials=args.trials, timesteps=args.timesteps)

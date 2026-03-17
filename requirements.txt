@@ -1,9 +1,11 @@
-yfinance
 pandas
-gymnasium
-stable-baselines3
-shimmy
 numpy
+yfinance
+scikit-learn
+statsmodels
 nltk
-gradio
+stable-baselines3[extra]
+torch
 optuna
+gradio
+scipy
