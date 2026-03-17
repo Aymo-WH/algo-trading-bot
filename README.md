@@ -1,12 +1,9 @@
 # 🤖 Quantitative AI Trading Architecture: Information-Driven Meta-Labeling
-
-**Version:** 9.0 (Cloud-Ready Institutional Grade)  
+**Version:** 9.0 (Cloud-Ready Institutional Grade)
 **Core Methodology:** Marcos López de Prado (*Advances in Financial Machine Learning*)
 
 ## 🏛️ Executive Summary
-This repository implements a professional-grade algorithmic trading pipeline that fundamentally departs from standard retail technical analysis. By utilizing Information-Driven Dollar Bars, Point-in-Time PCA, and a dual-agent Reinforcement Learning (RL) meta-labeling framework, the system captures non-linear market dynamics safely. Furthermore, execution limits are mathematically derived via an Ornstein-Uhlenbeck stochastic process, and the entire pipeline is validated against selection bias using Combinatorially Symmetric Cross-Validation (CSCV).
-
----
+This repository implements an advanced algorithmic trading pipeline moving beyond standard retail technical analysis. By utilizing Information-Driven Dollar Bars, Point-in-Time PCA, and a dual-agent Reinforcement Learning (RL) meta-labeling framework, the system captures non-linear market dynamics safely.
 
 ## ⚙️ Core Quantitative Infrastructure
 
