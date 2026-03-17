@@ -91,16 +91,6 @@ def get_mock_sentiment_batch(n, sia):
     final_scores = selected_scores + noise
     return np.clip(final_scores, -1.0, 1.0)
 
-def get_mock_sentiment(sia):
-    """
-    Simulates fetching daily news headlines and returns a sentiment score.
-    """
-    scores = _get_cached_scores(sia)
-    score = np.random.choice(scores)
-    # Add some noise to make it less discrete
-    score += random.uniform(-0.1, 0.1)
-    return max(-1.0, min(1.0, score)) # Clip to [-1, 1]
-
 def construct_dollar_bars(df, target_bars_per_day=10):
     df = df.copy()
 
