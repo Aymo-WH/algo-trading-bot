@@ -85,13 +85,19 @@ class TradingEnv(gym.Env):
         for d in self.dfs:
             obs = d[['Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']].values.astype(np.float32)
             prices = d['Close'].values
-            self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices})
+            atr = d['ATR'].values if 'ATR' in d.columns else prices * 0.02
+            opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
+            opt_sl = d['Optimal_SL'].values if 'Optimal_SL' in d.columns else np.full(len(d), 2.0)
+            self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices, 'atr': atr, 'opt_pt': opt_pt, 'opt_sl': opt_sl})
 
         # Select a random DataFrame initially
         selected_data = random.choice(self.precomputed_data)
         self.df = selected_data['df']
         self.obs_matrix = selected_data['obs']
         self._prices = selected_data['prices']
+        self._atr = selected_data['atr']
+        self._opt_pt = selected_data['opt_pt']
+        self._opt_sl = selected_data['opt_sl']
 
         # Define action and observation space
         if self.is_discrete:
@@ -125,6 +131,9 @@ class TradingEnv(gym.Env):
         self.df = selected_data['df']
         self.obs_matrix = selected_data['obs']
         self._prices = selected_data['prices']
+        self._atr = selected_data['atr']
+        self._opt_pt = selected_data['opt_pt']
+        self._opt_sl = selected_data['opt_sl']
 
         if options and 'start_step' in options:
             self.current_step = options['start_step']
@@ -162,10 +171,10 @@ class TradingEnv(gym.Env):
             current_price = self._prices[decision_idx]
             
             # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
-            current_atr = self.df['ATR'].iloc[decision_idx] if 'ATR' in self.df.columns else current_price * 0.02
+            current_atr = self._atr[decision_idx]
 
-            current_pt_mult = self.df['Optimal_PT'].iloc[decision_idx] if 'Optimal_PT' in self.df.columns else 2.0
-            current_sl_mult = self.df['Optimal_SL'].iloc[decision_idx] if 'Optimal_SL' in self.df.columns else 2.0
+            current_pt_mult = self._opt_pt[decision_idx]
+            current_sl_mult = self._opt_sl[decision_idx]
 
             forced_sell = False
             if self.shares_held > 0 and self.entry_price > 0:
