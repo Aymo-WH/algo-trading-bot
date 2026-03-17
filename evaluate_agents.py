@@ -129,8 +129,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     }
 
 def evaluate_model(dqn_model, ppo_model, ticker):
-    import os
-
     # Load specific dataframe
     data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
     if not os.path.exists(data_path):
