@@ -98,8 +98,8 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     df['Dollar_Volume'] = df['Close'] * df['Volume']
 
     # Calculate dynamic threshold (M):
-    # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by 10
-    M = df['Dollar_Volume'].rolling(window=210).sum() / 10
+    # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by 300
+    M = df['Dollar_Volume'].rolling(window=210).sum() / 300
 
     # Forward-fill/backward-fill NaNs
     M = M.ffill().bfill()
