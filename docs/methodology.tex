@@ -1,8 +1,73 @@
-\documentclass{article}
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{setspace}
+\geometry{a4paper, margin=1in}
+
+\title{\textbf{Meta-Labeling and Optimal Trading Rules:\\ An Information-Driven Reinforcement Learning Architecture}}
+\author{Lead Quantitative Researcher}
+\date{\today}
+
 \begin{document}
-\title{Information-Driven Meta-Labeling Architecture}
-\author{Research Team}
+
 \maketitle
+
+\begin{abstract}
+This paper details the architecture of an institutional-grade algorithmic trading system that departs from standard chronological time-series analysis. By utilizing Information-Driven Dollar Bars, Point-in-Time Principal Component Analysis (PCA), and a dual-agent Reinforcement Learning (RL) meta-labeling framework, the system captures non-linear market dynamics safely. Furthermore, execution limits are mathematically derived via an Ornstein-Uhlenbeck stochastic process, and the entire pipeline is validated against selection bias using Combinatorially Symmetric Cross-Validation (CSCV).
+\end{abstract}
+
 \section{Introduction}
-This paper outlines the Information-Driven Meta-Labeling architecture.
+Standard retail algorithmic trading relies heavily on chronological time bars (OHLCV) and integer-differentiated data. These methodologies invariably lead to heteroscedasticity, the complete loss of statistical memory, and eventual backtest overfitting. This architecture resolves these structural flaws by implementing the frameworks proposed by Marcos López de Prado, bridging the gap between theoretical stochastic calculus and applied Deep Reinforcement Learning.
+
+\section{Information-Driven Data Architecture}
+
+\subsection{Dollar Bars and Microstructure}
+Chronological time bars oversample information during periods of low market activity and undersample during volatile market shocks. To achieve a normal, homoscedastic distribution of returns, we construct Information-Driven Dollar Bars. We sample the market only when a dynamic threshold $M$ of fiat currency is exchanged. The cumulative dollar volume $\theta_T$ at time $T$ is defined as:
+$$ \theta_T = \sum_{t=1}^{T} p_t v_t $$
+A bar is formed strictly when $\theta_T \geq M$. The threshold $M$ is dynamically calibrated using a rolling 30-day window to target a stable average of daily events, insulating the model against corporate actions like share buybacks and long-term asset appreciation.
+
+\subsection{Fractional Differentiation (FFD) and Stationarity}
+Machine learning models require stationary data, but standard integer differencing ($d=1$) destroys systemic memory. We apply Fixed-Width Window Fractional Differentiation (FFD). Using the binomial series expansion of the lag operator $(1-B)^d$, the weights $\omega_k$ are calculated as:
+$$ \omega_k = - \omega_{k-1} \frac{d - k + 1}{k} $$
+The system iteratively searches for the minimum differentiation coefficient $d^* \in (0, 1)$ that allows the time series to pass the Augmented Dickey-Fuller (ADF) test for stationarity ($p < 0.05$) while preserving the maximum possible correlation with the original un-differentiated price series.
+
+\section{The Meta-Labeling Framework}
+A fundamental flaw in standard predictive models is conflating the ``Side" (direction) of a trade with the ``Size" (conviction). We separate these concerns using a dual-network architecture.
+
+\subsection{Primary and Secondary Agents}
+\begin{itemize}
+    \item \textbf{Primary Model (DQN):} A Deep Q-Network acts as the directional signal generator, outputting discrete actions (Long, Short, Hold).
+    \item \textbf{Secondary Model (PPO):} A Proximal Policy Optimization agent acts as the meta-labeler, analyzing the orthogonalized PCA state vectors to predict the probability $p$ that the DQN's signal will be profitable.
+\end{itemize}
+
+\subsection{Continuous Bet Sizing}
+The PPO's continuous output $p \in [0, 1]$ is normalized to calculate the optimal bet size $m$. We calculate the $z$-score and derive conviction using the standard Normal Cumulative Distribution Function (CDF):
+$$ z = \frac{p - 0.5}{\sqrt{p(1-p)}} $$
+$$ m = 2Z[z] - 1 $$
+This ensures capital is deployed logarithmically in proportion to the model's statistical confidence.
+
+\section{Execution and Risk Management}
+
+\subsection{The Optimal Trading Rule (OTR)}
+Optimizing Stop-Loss ($\underline{\pi}$) and Profit-Taking ($\bar{\pi}$) execution barriers alongside neural network hyperparameters inevitably leads to curve-fitting. We isolate execution logic by mathematically modeling the asset's underlying price dynamics as a discrete Ornstein-Uhlenbeck (O-U) process:
+$$ P_{i,t} = E_0[P_{i,T_i}] + \varphi(P_{i,t-1} - E_0[P_{i,T_i}]) + \xi_t $$
+Using an Ordinary Least Squares (OLS) regression over a rolling 60-day window, we estimate the speed of mean reversion ($\varphi$) and volatility ($\sigma$). We then generate 100,000 synthetic futures paths:
+$$ P_{i,t} = (1 - \varphi)E_0[P_{i,T_i}] + \varphi P_{i,t-1} + \sigma \epsilon_{i,t} $$
+The barriers are dynamically calibrated by grid-searching this synthetic landscape to maximize the Sharpe ratio, ensuring execution limits are driven by current market physics rather than historical noise.
+
+\section{Statistical Validation (CSCV)}
+To quantify the risk of multiple testing selection bias during hyperparameter optimization, we deploy Combinatorially Symmetric Cross-Validation (CSCV).
+
+A $T \times N$ matrix of out-of-sample trial performances ($T$ timesteps, $N$ evaluated hyperparameter combinations) is partitioned into $S$ sub-matrices. We evaluate all $\binom{S}{S/2}$ combinations of Training and Testing sets. For each combination $c$, we calculate the relative rank $\bar{\omega}_c$ of the optimal in-sample strategy against the out-of-sample distribution. The logit is computed as:
+$$ \lambda_c = \log\left[\frac{\bar{\omega}_c}{1 - \bar{\omega}_c}\right] $$
+The Probability of Backtest Overfitting (PBO) is the cumulative distribution of these logits below zero:
+$$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
+
+\section{Conclusion}
+By synthesizing Information-Driven data architectures, point-in-time orthogonalization, and O-U stochastic calculus within a Reinforcement Learning framework, this pipeline establishes a robust, institutionally verifiable method for algorithmic alpha generation.
+
 \end{document}
