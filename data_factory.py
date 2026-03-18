@@ -8,10 +8,10 @@ from sklearn.preprocessing import StandardScaler
 import random
 import os
 import re
-from utils import load_config
+from core.utils import load_config
 from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
-from optimize_barriers import get_rolling_barriers
+from core.optimize_barriers import get_rolling_barriers
 
 MOCK_HEADLINES = [
     "Company reports record earnings.",
@@ -36,6 +36,20 @@ _MOCK_HEADLINE_SCORES = None
 
 
 def get_weights_ffd(d, thres=1e-4):
+    """
+    Calculates the weights for Fractional Differentiation (FFD).
+
+    Fractional Differentiation allows for transforming a non-stationary time series
+    into a stationary one while preserving the maximum amount of memory (unlike
+    integer differentiation which completely destroys memory).
+
+    Args:
+        d (float): The fractional differentiation degree (0 < d < 1).
+        thres (float): The weight threshold to truncate the series. Defaults to 1e-4.
+
+    Returns:
+        np.ndarray: Column vector of weights.
+    """
     w, k = [1.], 1
     while True:
         w_ = -w[-1] / k * (d - k + 1)
@@ -46,6 +60,21 @@ def get_weights_ffd(d, thres=1e-4):
     return np.array(w[::-1]).reshape(-1, 1)
 
 def frac_diff_ffd(series, d, thres=1e-4):
+    """
+    Applies Fractional Differentiation (FFD) to a Pandas DataFrame.
+
+    By fractionally differentiating price series, the resulting data becomes
+    stationary (passing the ADF test) while retaining long memory of past prices,
+    crucial for the predictive power of machine learning models.
+
+    Args:
+        series (pd.DataFrame): DataFrame containing the target series (e.g., 'Close' price).
+        d (float): The optimal fractional degree.
+        thres (float): The threshold for weight calculation. Defaults to 1e-4.
+
+    Returns:
+        pd.DataFrame: A DataFrame with the fractionally differentiated series.
+    """
     w = get_weights_ffd(d, thres)
     width = len(w) - 1
     # get_weights_ffd returns weights in reversed order [w_k, ..., w_0]
@@ -83,6 +112,16 @@ def _get_cached_scores(sia):
     return _MOCK_HEADLINE_SCORES
 
 def get_mock_sentiment_batch(n, sia):
+    """
+    Generates a batch of mock sentiment scores for the simulated dataset.
+
+    Args:
+        n (int): Number of sentiment scores to generate.
+        sia (SentimentIntensityAnalyzer): Pre-initialized VADER sentiment analyzer.
+
+    Returns:
+        np.ndarray: An array of simulated sentiment scores clipped between -1.0 and 1.0.
+    """
     scores = _get_cached_scores(sia)
 
     # Vectorized sampling
@@ -92,6 +131,22 @@ def get_mock_sentiment_batch(n, sia):
     return np.clip(final_scores, -1.0, 1.0)
 
 def construct_dollar_bars(df, target_bars_per_day=10):
+    """
+    Compresses standard time bars into Information-Driven Dollar Bars.
+
+    Unlike time bars which suffer from heteroscedasticity (varying volatility and
+    information flow depending on the time of day), Dollar Bars sample the market
+    only when a dynamic threshold of dollar volume is exchanged. This neutralizes
+    heteroscedasticity and restores the statistical properties of the price series
+    (bringing it closer to a Normal distribution).
+
+    Args:
+        df (pd.DataFrame): The raw intraday time bars (Open, High, Low, Close, Volume).
+        target_bars_per_day (int): The target average number of bars per day. Defaults to 10.
+
+    Returns:
+        pd.DataFrame: A DataFrame indexed by the completion time of each Dollar Bar.
+    """
     df = df.copy()
 
     # Calculate 'Dollar Volume'
@@ -146,6 +201,18 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     return dollar_df
 
 def fetch_data():
+    """
+    Main data pipeline: fetches, processes, and saves financial data.
+
+    This function executes the complete feature engineering pipeline:
+    1. Downloads 730 days of 1-hour intraday data.
+    2. Compresses time bars into Information-Driven Dollar Bars.
+    3. Calculates technical indicators (RSI, MACD, BB, ATR).
+    4. Computes rolling Optimal Trading Rules (PT and SL multipliers).
+    5. Applies Point-in-Time PCA on technical indicators to prevent collinearity.
+    6. Applies Fractional Differentiation to the 'Close' price for stationarity.
+    7. Splits the data into Train/Test sets with an embargo to prevent leakage.
+    """
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
 

@@ -2,7 +2,23 @@ import numpy as np
 from scipy.stats import norm
 
 class MetaAgent:
+    """
+    Implements Marcos López de Prado's Meta-Labeling architecture.
+
+    This agent combines a primary model (DQN) for directional signals (buy/sell/hold)
+    with a secondary model (PPO) for risk sizing. By converting the secondary model's
+    output into a conviction probability, mapping it to a z-score, and applying the
+    Normal CDF, it mathematically determines the optimal bet size.
+    """
     def __init__(self, dqn_model, ppo_model, step_size=0.1):
+        """
+        Initializes the MetaAgent with two pre-trained reinforcement learning models.
+
+        Args:
+            dqn_model (stable_baselines3.DQN): Primary directional model.
+            ppo_model (stable_baselines3.PPO): Secondary bet-sizing model.
+            step_size (float): Discretization step for bet sizing to prevent jitter. Defaults to 0.1.
+        """
         self.dqn = dqn_model
         self.ppo = ppo_model
         self.step_size = step_size
@@ -12,6 +28,22 @@ class MetaAgent:
         self.action_space = ppo_model.action_space
 
     def predict(self, obs, deterministic=True):
+        """
+        Predicts the optimal trading action based on Meta-Labeling mathematics.
+
+        1. The primary model (DQN) generates a directional signal (-1, 0, 1).
+        2. If the signal is to trade, the secondary model (PPO) outputs a continuous value.
+        3. This continuous value is mapped to a raw probability [0, 1].
+        4. A z-score is calculated, and the Normal CDF translates it into a bet size (m).
+        5. The final bet size is discretized to avoid over-trading due to noise.
+
+        Args:
+            obs (np.ndarray): The current environment observation.
+            deterministic (bool): Whether to use deterministic actions. Defaults to True.
+
+        Returns:
+            tuple: (action array, state/None) conforming to the Stable-Baselines3 predict signature.
+        """
         # 1. Primary Model (DQN) - Signal Generation
         dqn_act, _ = self.dqn.predict(obs, deterministic=deterministic)
 

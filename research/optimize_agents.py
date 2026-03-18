@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
-from pbo_validator import PBOValidator
+from core.pbo_validator import PBOValidator
 
 # Global matrix to store the out-of-sample return series for every trial
 TRIAL_RETURNS_MATRIX = {}
