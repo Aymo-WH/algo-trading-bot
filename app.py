@@ -39,15 +39,64 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
         gr.Markdown("### Active Positions Board")
 
     with gr.Row():
+        asset_class_dropdown = gr.Dropdown(
+            choices=["Tech Equities", "Global Macro", "Crypto"],
+            value="Tech Equities",
+            label="Select Asset Class"
+        )
+
+    with gr.Row():
         positions_df = gr.Dataframe(
             headers=["Ticker", "Entry Price", "Current Price", "Distance to Take Profit", "Distance to Stop Loss", "Time Barrier"],
             datatype=["str", "number", "number", "str", "str", "str"],
             value=[
                 ["NVDA", 450.00, 455.00, "1.2%", "-3.0%", "5 days"],
-                ["AAPL", 180.00, 179.50, "4.0%", "-1.5%", "2 days"]
+                ["AAPL", 180.00, 179.50, "4.0%", "-1.5%", "2 days"],
+                ["MSFT", 330.00, 335.00, "2.1%", "-2.5%", "7 days"],
+                ["AMD",  110.00, 112.50, "3.5%", "-4.0%", "3 days"],
+                ["INTC",  35.00,  34.50, "1.5%", "-1.0%", "1 days"]
             ],
             label="Simulated Currently Held Tickers"
         )
+
+    import json
+    import os
+
+    def update_tickers(asset_class):
+        config_map = {
+            "Tech Equities": "config.json",
+            "Global Macro": "config_macro.json",
+            "Crypto": "config_crypto.json"
+        }
+
+        config_filename = config_map.get(asset_class, "config.json")
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", config_filename)
+
+        try:
+            with open(config_path, "r") as f:
+                config_data = json.load(f)
+                tickers = config_data.get("tickers", [])
+        except Exception as e:
+            tickers = []
+
+        # Generate dummy execution rows for the specific tickers
+        rows = []
+        for i, ticker in enumerate(tickers):
+            # Deterministic dummy data for display purposes
+            entry_price = 100.0 * (i + 1)
+            current_price = entry_price * 1.05
+            dtp = f"{1.5 + i}%"
+            dsl = f"-{2.0 + i}%"
+            tb = f"{i + 2} days"
+            rows.append([ticker, entry_price, current_price, dtp, dsl, tb])
+
+        return rows
+
+    asset_class_dropdown.change(
+        fn=update_tickers,
+        inputs=asset_class_dropdown,
+        outputs=positions_df
+    )
 
 if __name__ == "__main__":
     dashboard.launch(share=True)
