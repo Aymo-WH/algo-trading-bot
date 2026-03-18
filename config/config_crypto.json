@@ -5,7 +5,5 @@
     "SOL-USD",
     "AVAX-USD"
   ],
-  "start_date": "2016-01-01",
-  "end_date": "2026-01-01",
   "transaction_fee_percent": 0.001
 }
