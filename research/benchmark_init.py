@@ -3,7 +3,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from trading_gym import TradingEnv
+from core.trading_gym import TradingEnv
 
 def benchmark_init(n_envs=10):
     start_time = time.time()

@@ -2,14 +2,14 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from stable_baselines3 import PPO, DQN
-from trading_gym import TradingEnv
-from meta_agent import MetaAgent
+from core.trading_gym import TradingEnv
+from core.meta_agent import MetaAgent
 import glob
 import os
 import warnings
 import random
-from utils import flatten_multiindex_columns
-from pbo_validator import PBOValidator
+from core.utils import flatten_multiindex_columns
+from core.pbo_validator import PBOValidator
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -20,6 +20,15 @@ DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
 
 def load_agent(model_path):
+    """
+    Loads a trained reinforcement learning agent from disk.
+
+    Args:
+        model_path (str): The path to the saved model file (.zip).
+
+    Returns:
+        stable_baselines3.BaseAlgorithm: The loaded model instance, or None if the path is invalid.
+    """
     if "ppo" in model_path.lower():
         return PPO.load(model_path)
     elif "dqn" in model_path.lower():
@@ -28,6 +37,20 @@ def load_agent(model_path):
         raise ValueError(f"Unknown model type for {model_path}")
 
 def calculate_cagr(start_value, end_value, start_date, end_date):
+    """
+    Calculates the Compound Annual Growth Rate (CAGR).
+
+    CAGR measures the annualized return rate of an investment assuming profits are reinvested.
+
+    Args:
+        start_value (float): Initial portfolio value.
+        end_value (float): Final portfolio value.
+        start_date (datetime): Timestamp of the first bar.
+        end_date (datetime): Timestamp of the last bar.
+
+    Returns:
+        float: The calculated CAGR as a percentage. Returns 0 if calculation is invalid.
+    """
     days = (end_date - start_date).days
     if days <= 0: return 0.0
     years = days / 365.25
@@ -36,6 +59,23 @@ def calculate_cagr(start_value, end_value, start_date, end_date):
     return (end_value / start_value) ** (1 / years) - 1
 
 def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
+    """
+    Evaluates a trained model on a specific stock's DataFrame over predefined chronological steps.
+
+    This function initializes a TradingEnv, loads the model, and forces the environment to reset
+    to specific indices. It returns a dictionary of performance metrics including Total Return,
+    Sharpe Ratio, Max Drawdown, and Win Rate.
+
+    Args:
+        model: A loaded stable-baselines3 model (DQN/PPO) or MetaAgent.
+        df (pd.DataFrame): The specific stock's historical data.
+        stock_name (str): Ticker symbol.
+        is_discrete (bool): Flag indicating if the agent expects discrete actions.
+        start_steps (list): Fixed chronological starting indices for valid PBO calculation.
+
+    Returns:
+        dict: Performance metrics averaged across all evaluated steps.
+    """
     # Ensure Date is datetime
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
@@ -129,6 +169,18 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     }
 
 def evaluate_model(dqn_model, ppo_model, ticker):
+    """
+    Orchestrates the evaluation of multiple models (Hold, DQN, PPO, MetaAgent) for a ticker.
+
+    This function compares standalone base models against the combined Meta-Labeling architecture.
+    It iterates over 5 non-overlapping fixed windows to generate evaluation metrics, which are
+    then printed in a comparative table.
+
+    Args:
+        dqn_model (stable_baselines3.DQN): Trained directional agent.
+        ppo_model (stable_baselines3.PPO): Trained sizing agent.
+        ticker (str): The stock ticker to evaluate.
+    """
     # Load specific dataframe
     data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
     if not os.path.exists(data_path):
@@ -180,6 +232,9 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
         return 0.0, 0.0
 
 def main():
+    """
+    Command-line execution flow for evaluating agents against baseline hold strategies.
+    """
     print("Starting Evaluation...")
 
     # Find Models
