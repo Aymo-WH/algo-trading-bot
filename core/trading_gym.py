@@ -6,9 +6,17 @@ import glob
 import random
 import os
 from collections import deque
-from utils import load_config
+from core.utils import load_config
 
 class TradingEnv(gym.Env):
+    """
+    A unified trading environment integrating Information-Driven features and the Triple-Barrier Method.
+
+    This custom Gymnasium environment handles the core simulation for reinforcement learning agents.
+    It accepts pre-processed data (FFD, Point-in-Time PCA, Dollar Bars) and native implements
+    Marcos López de Prado's Triple-Barrier Method (Profit Taking, Stop Loss, and Time barriers)
+    during each step step() execution.
+    """
     """Custom Trading Environment that follows gym interface"""
     metadata = {'render_modes': ['human']}
 
@@ -16,6 +24,16 @@ class TradingEnv(gym.Env):
     _DATA_CACHE = {}
 
     def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
+        """
+        Initializes the trading environment and pre-loads data into memory caches to O(1) step access.
+
+        Args:
+            df (pd.DataFrame, optional): Directly pass a specific ticker DataFrame.
+            is_discrete (bool): If True, use discrete actions (e.g. for DQN). Defaults to False.
+            data_dir (str): Directory containing preprocessed CSV files. Defaults to 'data/'.
+            transaction_fee_percent (float, optional): Custom fee. Overrides config.json.
+            window_size (int): Lookback sequence length for state observations. Defaults to 10.
+        """
         """
         Initialize the Trading Environment.
 
@@ -124,6 +142,16 @@ class TradingEnv(gym.Env):
         self.entry_atr = 0.0
 
     def reset(self, seed=None, options=None):
+        """
+        Resets the environment state and randomly selects a new data chunk for the episode.
+
+        Args:
+            seed (int, optional): Random seed.
+            options (dict, optional): Dict to pass start_step.
+
+        Returns:
+            tuple: (observation array, info dict).
+        """
         super().reset(seed=seed)
 
         # Randomly select a precomputed data entry for the new episode
@@ -167,110 +195,124 @@ class TradingEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-            decision_idx = self.current_step + self.window_size - 1
-            current_price = self._prices[decision_idx]
-            
-            # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
-            current_atr = self._atr[decision_idx]
+        """
+        Executes a trading step incorporating Marcos López de Prado's Triple-Barrier logic.
 
-            current_pt_mult = self._opt_pt[decision_idx]
-            current_sl_mult = self._opt_sl[decision_idx]
+        The function checks if an upper (Profit Taking), lower (Stop Loss), or vertical (Time)
+        barrier has been breached based on dynamic Optimal Trading Rules (OTR). If breached,
+        it forcefully overrides the agent's action and liquidates the position. The reward
+        uses a Sortino-style Risk-Adjusted proxy, heavily penalizing downside volatility.
 
-            forced_sell = False
-            if self.shares_held > 0 and self.entry_price > 0:
-                bars_held = self.current_step - self.entry_step
-                upper_barrier = self.entry_price + (self.entry_atr * current_pt_mult)
-                lower_barrier = self.entry_price - (self.entry_atr * current_sl_mult)
+        Args:
+        action (int/float/np.ndarray): The agent's requested action.
 
-                if current_price >= upper_barrier:  # Take Profit (Upper Barrier)
-                    forced_sell = True
-                elif current_price <= lower_barrier:  # Stop Loss (Lower Barrier)
-                    forced_sell = True
-                elif bars_held >= self.max_holding_bars:  # Time Limit (Vertical Barrier)
-                    forced_sell = True
+        Returns:
+        tuple: (observation, reward, terminated, truncated, info dict).
+        """
+        decision_idx = self.current_step + self.window_size - 1
+        current_price = self._prices[decision_idx]
 
-            # Override action to force a 100% sell if a barrier is breached
-            if forced_sell:
-                if self.is_discrete:
-                    action = 0  # Assuming 0 maps to -1.0 in your mapping dict
-                else:
-                    action = np.array([-1.0])
+        # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
+        current_atr = self._atr[decision_idx]
 
-            # ETF TRICK: Track pure mark-to-market before rebalancing
-            prev_val = self.cash + (self.shares_held * current_price)
-            
+        current_pt_mult = self._opt_pt[decision_idx]
+        current_sl_mult = self._opt_sl[decision_idx]
+
+        forced_sell = False
+        if self.shares_held > 0 and self.entry_price > 0:
+            bars_held = self.current_step - self.entry_step
+            upper_barrier = self.entry_price + (self.entry_atr * current_pt_mult)
+            lower_barrier = self.entry_price - (self.entry_atr * current_sl_mult)
+
+            if current_price >= upper_barrier:  # Take Profit (Upper Barrier)
+                forced_sell = True
+            elif current_price <= lower_barrier:  # Stop Loss (Lower Barrier)
+                forced_sell = True
+            elif bars_held >= self.max_holding_bars:  # Time Limit (Vertical Barrier)
+                forced_sell = True
+
+        # Override action to force a 100% sell if a barrier is breached
+        if forced_sell:
             if self.is_discrete:
-                mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
-                act = mapping[int(action)]
+                action = 0  # Assuming 0 maps to -1.0 in your mapping dict
             else:
-                act = float(action[0])
+                action = np.array([-1.0])
+
+        # ETF TRICK: Track pure mark-to-market before rebalancing
+        prev_val = self.cash + (self.shares_held * current_price)
+
+        if self.is_discrete:
+            mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
+            act = mapping[int(action)]
+        else:
+            act = float(action[0])
             
-            step_fee = 0.0
+        step_fee = 0.0
             
-            # Calculate Rebalancing
-            if act > 0: 
-                amount_to_invest = self.cash * act
-                step_fee = amount_to_invest * self.transaction_fee_percent
-                net_investment = amount_to_invest - step_fee
+        # Calculate Rebalancing
+        if act > 0:
+            amount_to_invest = self.cash * act
+            step_fee = amount_to_invest * self.transaction_fee_percent
+            net_investment = amount_to_invest - step_fee
                 
-                if net_investment > 0 and current_price > 0:
-                    shares_bought = net_investment / current_price
-                    self.cash -= amount_to_invest
-                    self.shares_held += shares_bought
+            if net_investment > 0 and current_price > 0:
+                shares_bought = net_investment / current_price
+                self.cash -= amount_to_invest
+                self.shares_held += shares_bought
                     
-                    if self.entry_price == 0.0:  # Only set on initial entry, not scaling in
-                        self.entry_price = current_price
-                        self.entry_step = self.current_step
-                        self.entry_atr = current_atr
+                if self.entry_price == 0.0:  # Only set on initial entry, not scaling in
+                    self.entry_price = current_price
+                    self.entry_step = self.current_step
+                    self.entry_atr = current_atr
 
-            elif act < 0: 
-                fraction = abs(act)
-                shares_sold = self.shares_held * fraction
-                gross_proceeds = shares_sold * current_price
-                step_fee = gross_proceeds * self.transaction_fee_percent
-                net_proceeds = gross_proceeds - step_fee
+        elif act < 0:
+            fraction = abs(act)
+            shares_sold = self.shares_held * fraction
+            gross_proceeds = shares_sold * current_price
+            step_fee = gross_proceeds * self.transaction_fee_percent
+            net_proceeds = gross_proceeds - step_fee
                 
-                self.cash += net_proceeds
-                self.shares_held -= shares_sold
+            self.cash += net_proceeds
+            self.shares_held -= shares_sold
 
-                if self.shares_held <= 1e-6: # Account for float precision
-                    self.shares_held = 0.0
-                    self.entry_price = 0.0
-                    self.entry_step = 0
-                    self.entry_atr = 0.0
+            if self.shares_held <= 1e-6: # Account for float precision
+                self.shares_held = 0.0
+                self.entry_price = 0.0
+                self.entry_step = 0
+                self.entry_atr = 0.0
     
-            self.current_step += 1
+        self.current_step += 1
     
-            new_decision_idx = self.current_step + self.window_size - 1
-            new_price = self._prices[new_decision_idx]
+        new_decision_idx = self.current_step + self.window_size - 1
+        new_price = self._prices[new_decision_idx]
             
-            # ETF TRICK: Calculate reward based on pure asset growth, THEN explicitly deduct fee
-            pure_new_val = self.cash + (self.shares_held * new_price)
-            daily_return = (pure_new_val - prev_val) / prev_val if prev_val > 0 else 0
+        # ETF TRICK: Calculate reward based on pure asset growth, THEN explicitly deduct fee
+        pure_new_val = self.cash + (self.shares_held * new_price)
+        daily_return = (pure_new_val - prev_val) / prev_val if prev_val > 0 else 0
             
-            if daily_return > 0:
-                reward = daily_return * 100
-            else:
-                reward = (daily_return * 100) * 1.5 
+        if daily_return > 0:
+            reward = daily_return * 100
+        else:
+            reward = (daily_return * 100) * 1.5
                 
-            # Hold Cash Penalty
-            if self.shares_held == 0:
-                reward -= 0.01
+        # Hold Cash Penalty
+        if self.shares_held == 0:
+            reward -= 0.01
                 
-            # Explicit Negative Dividend (Prevents fake compounding)
-            reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
+        # Explicit Negative Dividend (Prevents fake compounding)
+        reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
     
-            terminated = (self.current_step - self.start_step >= self.episode_length) or \
-                         ((self.current_step + self.window_size) >= len(self.df))
-            truncated = False
+        terminated = (self.current_step - self.start_step >= self.episode_length) or \
+                     ((self.current_step + self.window_size) >= len(self.df))
+        truncated = False
             
-            if pure_new_val < 1000:
-                terminated = True
+        if pure_new_val < 1000:
+            terminated = True
                 
-            new_obs_step = self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held)
-            self.obs_deque.append(new_obs_step)
+        new_obs_step = self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held)
+        self.obs_deque.append(new_obs_step)
     
-            return np.array(self.obs_deque, dtype=np.float32), reward, terminated, truncated, {'step_fee': step_fee}
+        return np.array(self.obs_deque, dtype=np.float32), reward, terminated, truncated, {'step_fee': step_fee}
 
     def _get_single_observation(self, step_idx, cash, shares_held):
         if step_idx < len(self.obs_matrix):
@@ -286,6 +328,12 @@ class TradingEnv(gym.Env):
         return np.concatenate((base_obs, [norm_cash, norm_holdings]))
 
     def render(self, mode='human'):
+        """
+        Prints current step performance (Net Worth, Profit, Cash, Shares).
+
+        Args:
+            mode (str): Rendering mode. Defaults to 'human'.
+        """
         if mode == 'human':
             # Calculate current price based on the current window position
             decision_idx = self.current_step + self.window_size - 1

@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import pandas as pd
-from trading_gym import TradingEnv
+from core.trading_gym import TradingEnv
 
 def run_benchmark():
     # Create dummy data

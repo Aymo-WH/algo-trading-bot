@@ -4,7 +4,18 @@ import yfinance as yf
 
 def estimate_ou_parameters(prices: pd.Series, window: int = 15):
     """
-    Estimates the Ornstein-Uhlenbeck parameters using OLS regression.
+    Estimates the Ornstein-Uhlenbeck (O-U) parameters using Ordinary Least Squares (OLS) regression.
+
+    The O-U process mathematically models the mean-reverting behavior of asset prices.
+    It calculates the speed of mean reversion (phi) and volatility (sigma) by comparing
+    lagged deviations of price from a rolling long-term mean.
+
+    Args:
+        prices (pd.Series): Historical price series.
+        window (int): The rolling window size to define the long-term mean. Defaults to 15.
+
+    Returns:
+        tuple: (phi, sigma) representing the speed of mean reversion and volatility.
     """
     # Define Y as the current prices (P_t)
     Y = prices.values
@@ -40,7 +51,21 @@ def estimate_ou_parameters(prices: pd.Series, window: int = 15):
 
 def generate_synthetic_paths(phi: float, sigma: float, num_paths: int = 100000, length: int = 15):
     """
-    Generates synthetic price paths using the Ornstein-Uhlenbeck process.
+    Generates synthetic price paths using the calibrated Ornstein-Uhlenbeck (O-U) process.
+
+    Using the parameters phi (mean reversion) and sigma (volatility), this function
+    simulates thousands of possible future price trajectories. These paths are used
+    to evaluate Marcos López de Prado's Optimal Trading Rules (OTR) without overfitting
+    to the single realized historical path.
+
+    Args:
+        phi (float): Speed of mean reversion from O-U estimation.
+        sigma (float): Volatility of the residuals from O-U estimation.
+        num_paths (int): Number of synthetic paths to simulate. Defaults to 100000.
+        length (int): The number of steps (bars) in each path. Defaults to 15.
+
+    Returns:
+        np.ndarray: A 2D array of shape (num_paths, length) containing simulated prices.
     """
     # Initialize paths array: num_paths rows, length columns
     paths = np.zeros((num_paths, length))
@@ -58,12 +83,20 @@ def generate_synthetic_paths(phi: float, sigma: float, num_paths: int = 100000, 
 
 def get_rolling_barriers(price_series: pd.Series, window: int = 60, step: int = 20) -> pd.DataFrame:
     """
-    Computes rolling optimal profit-taking and stop-loss barriers.
+    Computes rolling optimal profit-taking (PT) and stop-loss (SL) barriers.
 
-    :param price_series: pandas Series of historical prices.
-    :param window: lookback window size for optimization.
-    :param step: step size to roll the window.
-    :return: pandas DataFrame containing 'Optimal_PT' and 'Optimal_SL'.
+    This implements Marcos López de Prado's dynamic barrier optimization. By rolling a
+    lookback window over the price series, it repeatedly estimates the O-U parameters
+    and determines the point-in-time Optimal Trading Rules (PT and SL multipliers) that
+    maximize the expected Sharpe Ratio over synthetic paths.
+
+    Args:
+        price_series (pd.Series): The historical price data.
+        window (int): Lookback window size for estimating the O-U process. Defaults to 60.
+        step (int): The frequency (in bars) at which the barriers are re-optimized. Defaults to 20.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing 'Optimal_PT' and 'Optimal_SL' multipliers for each step.
     """
     # Create an empty DataFrame to hold the results
     result_df = pd.DataFrame(index=price_series.index, columns=['Optimal_PT', 'Optimal_SL'], dtype=float)
@@ -114,7 +147,20 @@ def get_rolling_barriers(price_series: pd.Series, window: int = 60, step: int = 
 
 def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_grid: np.ndarray):
     """
-    Evaluates a grid of PT and SL multipliers on the synthetic paths.
+    Evaluates a grid of PT and SL multipliers against synthetic O-U paths to find the optimal barriers.
+
+    According to Marcos López de Prado's Optimal Trading Rules, the optimal barriers are those
+    that maximize the Sharpe Ratio of the resulting PnL distribution when applied to the
+    simulated synthetic paths.
+
+    Args:
+        paths (np.ndarray): 2D array of synthetic price paths.
+        sigma (float): Estimated volatility used to scale the multipliers.
+        pt_grid (np.ndarray): Grid of candidate profit-taking multipliers.
+        sl_grid (np.ndarray): Grid of candidate stop-loss multipliers.
+
+    Returns:
+        tuple: (best_pt, best_sl, max_sharpe) the optimal multipliers and their expected Sharpe Ratio.
     """
     num_paths, length = paths.shape
     best_pt = None

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch, mock_open
 
 
 import unittest
-import utils
+import core.utils as utils
 
 class TestConfigCaching(unittest.TestCase):
     def setUp(self):
@@ -18,7 +18,7 @@ class TestConfigCaching(unittest.TestCase):
             # First call should read from file
             config1 = utils.load_config()
             self.assertEqual(config1.get('transaction_fee_percent'), 0.005)
-            mocked_file.assert_called_once_with('config.json', 'r')
+            mocked_file.assert_called_once_with('config/config.json', 'r')
 
             # Second call should use cache and NOT read from file
             mocked_file.reset_mock()

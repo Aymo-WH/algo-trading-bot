@@ -1,13 +1,19 @@
 import argparse
 import os
 import pandas as pd
-from trading_gym import TradingEnv
+from core.trading_gym import TradingEnv
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 import multiprocessing
 
 def parse_args():
+    """
+    Parses CLI arguments for training RL agents.
+
+    Returns:
+        argparse.Namespace: CLI arguments including model type, timesteps, and data dir.
+    """
     parser = argparse.ArgumentParser(description="Train a trading agent.")
     parser.add_argument(
         "--model",
@@ -37,7 +43,19 @@ def parse_args():
     return parser.parse_args()
 
 def validate_path(path_str, arg_name):
-    """Validates that a given path is within the current working directory."""
+    """
+    Validates that a given path is within the current working directory.
+
+    This function mitigates Path Traversal vulnerabilities by resolving absolute paths
+    and enforcing that they cannot traverse above the designated base directory.
+
+    Args:
+        path_str (str): The provided path.
+        arg_name (str): Argument name for error logging.
+
+    Returns:
+        str: The safely resolved path.
+    """
     if path_str is None:
         return None
     abs_path = os.path.abspath(path_str)
@@ -51,6 +69,9 @@ def validate_path(path_str, arg_name):
     return path_str
 
 def main():
+    """
+    Command-line execution flow for standalone model training.
+    """
     args = parse_args()
 
     # Validate paths
@@ -106,6 +127,20 @@ if __name__ == "__main__":
     main()
 
 def train_dqn(ticker, total_timesteps=10000, **kwargs):
+    """
+    Trains a DQN (Deep Q-Network) agent on a specific ticker.
+
+    DQN is a value-based reinforcement learning algorithm ideal for discrete action spaces.
+    In the Meta-Labeling architecture, this acts as the primary model predicting trade direction.
+
+    Args:
+        ticker (str): The specific stock to train on.
+        total_timesteps (int): Number of steps to train. Defaults to 10000.
+        **kwargs: Extensible hyperparameter overrides (e.g. learning rate, target update freq).
+
+    Returns:
+        stable_baselines3.DQN: The trained primary agent.
+    """
     # Determine learning rate and target update interval from kwargs
     learning_rate = kwargs.get('dqn_lr', 1e-4)
     target_update_interval = kwargs.get('dqn_target_update', 1000)
@@ -135,6 +170,20 @@ def train_dqn(ticker, total_timesteps=10000, **kwargs):
     return model
 
 def train_ppo(ticker, total_timesteps=10000, **kwargs):
+    """
+    Trains a PPO (Proximal Policy Optimization) agent on a specific ticker.
+
+    PPO is a policy gradient method adept at handling continuous action spaces.
+    In the Meta-Labeling architecture, this acts as the secondary model predicting bet size.
+
+    Args:
+        ticker (str): The specific stock to train on.
+        total_timesteps (int): Number of steps to train. Defaults to 10000.
+        **kwargs: Extensible hyperparameter overrides (e.g. learning rate, clip range, entropy coef).
+
+    Returns:
+        stable_baselines3.PPO: The trained secondary agent.
+    """
     learning_rate = kwargs.get('ppo_lr', 3e-4)
     clip_range = kwargs.get('ppo_clip', 0.2)
     ent_coef = kwargs.get('ppo_ent', 0.0)
