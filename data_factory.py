@@ -220,9 +220,15 @@ def fetch_data():
     # Load configuration
     config = load_config()
 
-    # Ensure data directory exists
+    import shutil
+    # Wipe previous data to prevent cross-asset pollution
+    shutil.rmtree('data/train', ignore_errors=True)
+    shutil.rmtree('data/test', ignore_errors=True)
+
+    # Ensure directories exist
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
+    os.makedirs('models/matrices', exist_ok=True)
 
     # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
@@ -387,10 +393,8 @@ def fetch_data():
 
         # Save matrices for Live Inference
         import joblib
-        import os
-        os.makedirs('models', exist_ok=True)
-        joblib.dump(scaler, f'models/scaler_{clean_ticker}.pkl')
-        joblib.dump(pca, f'models/pca_{clean_ticker}.pkl')
+        joblib.dump(scaler, f'models/matrices/scaler_{clean_ticker}.pkl')
+        joblib.dump(pca, f'models/matrices/pca_{clean_ticker}.pkl')
 
         pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
         df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
