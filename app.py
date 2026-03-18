@@ -1,4 +1,14 @@
+"""
+Gradio Web Application for Quantitative AI Trading Dashboard.
+
+This script launches an interactive dashboard providing 'Portfolio Oversight' for the
+deployed Information-Driven Meta-Labeling architecture. It visualizes live execution metrics,
+expected vs. paper trading Sharpe Ratios, and the status of actively held tickers including
+their proximity to optimal Profit-Taking and Stop-Loss barriers.
+"""
 import gradio as gr
+
+
 import pandas as pd
 import sys
 import os

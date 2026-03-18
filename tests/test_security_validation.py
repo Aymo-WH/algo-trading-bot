@@ -5,7 +5,7 @@ import sys
 
 import os
 import shutil
-from trading_gym import TradingEnv
+from core.trading_gym import TradingEnv
 import pandas as pd
 import numpy as np
 
