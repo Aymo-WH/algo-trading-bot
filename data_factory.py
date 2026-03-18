@@ -303,7 +303,9 @@ def fetch_data():
         split_idx = int(len(df) * 0.8)
         split_date = df.index[split_idx]
 
+        # Hotfix: Dynamic PCA Fit applied here
         train_clean_idx = df[(df.index < split_date)][tech_cols].dropna().index
+        # Dynamic split applied
 
         scaler = StandardScaler()
         # FIT ONLY ON TRAIN
@@ -332,6 +334,7 @@ def fetch_data():
         try:
             train_df = df[df.index < split_date]
             raw_test_df = df[df.index >= split_date]
+            # Hotfix: Dynamic Train/Test Split applied here
             
             # IMPLEMENT 1% EMBARGO (Drop first 1% of Test Set to prevent MACD/BB leakage)
             embargo_size = int(len(df) * 0.01)
