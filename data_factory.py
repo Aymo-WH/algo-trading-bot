@@ -296,41 +296,33 @@ def fetch_data():
 
         tech_cols = ['RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'ATR']
         
-        # Apply PCA (STRICTLY POINT-IN-TIME TO PREVENT LOOK-AHEAD BIAS)
-        all_clean_idx = df[tech_cols].dropna().index
+        # 1. Drop NaNs FIRST so the split calculations are accurate
+        df = df.dropna()
 
-        # Dynamically calculate the 80% split date
+        # 2. Dynamically calculate the 80% split date on healthy data
         split_idx = int(len(df) * 0.8)
         split_date = df.index[split_idx]
 
-        # Hotfix: Dynamic PCA Fit applied here
-        train_clean_idx = df[(df.index < split_date)][tech_cols].dropna().index
-        # Dynamic split applied
+        # 3. Create the Train index for PCA
+        train_clean_idx = df[df.index < split_date].index
+        all_clean_idx = df.index
 
+        # 4. Apply Point-in-Time PCA
         scaler = StandardScaler()
-        # FIT ONLY ON TRAIN
         scaler.fit(df.loc[train_clean_idx, tech_cols])
-        # TRANSFORM ALL
         scaled_tech = scaler.transform(df.loc[all_clean_idx, tech_cols])
         
         pca = PCA(n_components=5)
-        # FIT ONLY ON TRAIN SCALED DATA
         scaled_train_tech = scaler.transform(df.loc[train_clean_idx, tech_cols])
         pca.fit(scaled_train_tech)
-        # TRANSFORM ALL
         pca_features = pca.transform(scaled_tech)
 
         pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
-        
-        # BULLETPROOF PANDAS ASSIGNMENT
         df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
         df = pd.concat([df, df_pca], axis=1)
         df.drop(columns=tech_cols, inplace=True)
 
-        # Drop NaN rows
-        df = df.dropna()
-
-        # Split Data with 1% Embargo
+        # 5. Split Data
         try:
             train_df = df[df.index < split_date]
             raw_test_df = df[df.index >= split_date]
