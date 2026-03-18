@@ -45,8 +45,8 @@ def run_live_inference(config_path):
     matrices_aligned = True
     for ticker in tickers:
         clean_ticker = os.path.basename(ticker)
-        scaler_path = f"models/scaler_{clean_ticker}.pkl"
-        pca_path = f"models/pca_{clean_ticker}.pkl"
+        scaler_path = f"models/matrices/scaler_{clean_ticker}.pkl"
+        pca_path = f"models/matrices/pca_{clean_ticker}.pkl"
 
         if os.path.exists(scaler_path) and os.path.exists(pca_path):
             try:
