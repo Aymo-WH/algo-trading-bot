@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import random
 import os
 import re
+import joblib
 from core.utils import load_config
 from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
@@ -383,6 +384,13 @@ def fetch_data():
         scaled_train_tech = scaler.transform(df.loc[train_clean_idx, tech_cols])
         pca.fit(scaled_train_tech)
         pca_features = pca.transform(scaled_tech)
+
+        # Save matrices for Live Inference
+        import joblib
+        import os
+        os.makedirs('models', exist_ok=True)
+        joblib.dump(scaler, f'models/scaler_{clean_ticker}.pkl')
+        joblib.dump(pca, f'models/pca_{clean_ticker}.pkl')
 
         pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
         df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
