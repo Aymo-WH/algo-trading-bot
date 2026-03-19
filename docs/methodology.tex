@@ -8,8 +8,8 @@
 \usepackage{setspace}
 \geometry{a4paper, margin=1in}
 
-\title{\textbf{Meta-Labeling and Optimal Trading Rules:\\ An Information-Driven Reinforcement Learning Architecture}}
-\author{Lead Quantitative Researcher}
+\title{\textbf{Engineering Alpha: Overcoming Structural Failures in Information-Driven Reinforcement Learning Architectures}}
+\author{Khoo Wei Heng}
 \date{\today}
 
 \begin{document}
@@ -17,64 +17,69 @@
 \maketitle
 
 \begin{abstract}
-This paper details the architecture of an institutional-grade algorithmic trading system that departs from standard chronological time-series analysis. By utilizing Information-Driven Dollar Bars, Point-in-Time Principal Component Analysis (PCA), and a dual-agent Reinforcement Learning (RL) meta-labeling framework, the system captures non-linear market dynamics safely. Furthermore, execution limits are mathematically derived via an Ornstein-Uhlenbeck stochastic process, and the entire pipeline is validated against selection bias using Combinatorially Symmetric Cross-Validation (CSCV).
+The transition from retail algorithmic trading to institutional quantitative engineering requires abandoning chronological time-series analysis in favor of information-driven frameworks. This paper documents the end-to-end architecture of a dual-agent Reinforcement Learning (RL) meta-labeling system. Crucially, it chronicles the empirical development process, detailing the specific structural failures encountered—including data starvation via threshold miscalculation, sequence-induced IndexErrors during fractional differentiation, and mathematical state loss during live inference—and the rigorous engineering solutions applied to resolve them. The finalized architecture synthesizes Information-Driven Dollar Bars, Point-in-Time PCA, and Ornstein-Uhlenbeck stochastic execution barriers, rigorously validated via Combinatorially Symmetric Cross-Validation (CSCV).
 \end{abstract}
 
 \section{Introduction}
-Standard retail algorithmic trading relies heavily on chronological time bars (OHLCV) and integer-differentiated data. These methodologies invariably lead to heteroscedasticity, the complete loss of statistical memory, and eventual backtest overfitting. This architecture resolves these structural flaws by implementing the frameworks proposed by Marcos López de Prado, bridging the gap between theoretical stochastic calculus and applied Deep Reinforcement Learning.
+Standard algorithmic trading relies on chronological time bars (OHLCV) and integer-differentiated data. These methodologies invariably introduce heteroscedasticity, destroy statistical memory, and lead to catastrophic backtest overfitting. Our objective was to engineer a system bridging the gap between theoretical stochastic calculus and applied Deep Reinforcement Learning, utilizing the frameworks of Marcos López de Prado. However, theoretical mathematics often fractures when applied to raw market infrastructure. This paper documents both the intended design and the forensic telemetry of the failures that refined it.
 
 \section{Information-Driven Data Architecture}
 
-\subsection{Dollar Bars and Microstructure}
-Chronological time bars oversample information during periods of low market activity and undersample during volatile market shocks. To achieve a normal, homoscedastic distribution of returns, we construct Information-Driven Dollar Bars. We sample the market only when a dynamic threshold $M$ of fiat currency is exchanged. The cumulative dollar volume $\theta_T$ at time $T$ is defined as:
+\subsection{The Microstructure Problem and Dollar Bars}
+Chronological time oversamples information during low market activity and undersamples during volatile shocks. To achieve a normal, homoscedastic distribution of returns, we engineered Information-Driven Dollar Bars. We sample the market only when a dynamic threshold $M$ of fiat currency is exchanged:
 $$ \theta_T = \sum_{t=1}^{T} p_t v_t $$
-A bar is formed strictly when $\theta_T \geq M$. To ensure high-resolution sampling, the threshold $M$ is dynamically calibrated using a rolling 30-day window (approximately 210 hourly periods) of total Dollar Volume, scaled by a target constant $C$ (e.g., $C = 300$) to target a stable average of 10 daily events:
-$$ M_T = \frac{\sum_{i=T-210}^{T} \theta_i}{C} $$
-This dynamic calibration insulates the model against corporate actions like share buybacks and long-term asset appreciation.
+A bar is formed when $\theta_T \geq M$. 
 
-\subsection{Fractional Differentiation (FFD) and Stationarity}
-Machine learning models require stationary data, but standard integer differencing ($d=1$) destroys systemic memory. We apply Fixed-Width Window Fractional Differentiation (FFD). Using the binomial series expansion of the lag operator $(1-B)^d$, the weights $\omega_k$ are calculated as:
+\subsection{Empirical Failure 1: The Threshold Starvation Flaw}
+In our initial architecture, the dynamic threshold $M$ was calibrated using a rolling 30-day window of total Dollar Volume, arbitrarily divided by 10:
+$$ M_{T, \text{failed}} = \frac{\sum_{i=T-210}^{T} \theta_i}{10} $$
+\textbf{The Failure:} This equation defined $M$ as representing three entire days of trading volume. Instead of generating our target of 10 intraday bars per day, the engine generated 1 bar every 3 days. Over a 730-day period, the pipeline produced a mere 240 bars. When subsequent preprocessing (dropping NaNs) was applied, the dataset was decimated to exactly 9 valid rows, causing the RL environment to instantly crash with an `IndexError`.\\
+\textbf{The Solution:} We recalibrated the threshold divisor to map directly to the trading day frequency. By dividing the 30-day sum by 300 (30 days $\times$ 10 target bars), we achieved thousands of highly-resolved, homoscedastic events:
+$$ M_{T, \text{optimal}} = \frac{\sum_{i=T-210}^{T} \theta_i}{300} $$
+
+\subsection{Stationarity and Fractional Differentiation (FFD)}
+Machine learning requires stationary data, but standard integer differencing ($d=1$) destroys systemic memory. We applied Fixed-Width Window Fractional Differentiation (FFD), utilizing the binomial series expansion of the lag operator:
 $$ \omega_k = - \omega_{k-1} \frac{d - k + 1}{k} $$
-The system iteratively searches for the minimum differentiation coefficient $d^* \in (0, 1)$ that allows the time series to pass the Augmented Dickey-Fuller (ADF) test for stationarity ($p < 0.05$) while preserving the maximum possible correlation with the original un-differentiated price series.
+
+\subsection{Empirical Failure 2: The Look-Ahead Sequence Crash}
+\textbf{The Failure:} The FFD algorithm inherently requires a historical convolution window, generating a large block of initial `NaN` values. In early iterations, the dynamic 80/20 train-test split index was calculated \textit{before} dropping these `NaN` rows. Consequently, the entire 80\% "Training Set" timeline was composed of invalid data, which was subsequently deleted. The agent was fed an empty observation matrix, triggering a secondary mathematical collapse.\\
+\textbf{The Solution:} We enforced strict pipeline sequencing. The dataset is first truncated to drop FFD-induced `NaN`s, and only then is the dynamic 80/20 split index calculated. This guarantees the RL agent always receives a mathematically sound training vector.
+
+\section{Dimensionality Reduction and State Management}
+To prevent Look-Ahead Bias, we applied Principal Component Analysis (PCA) strictly point-in-time. The `StandardScaler` and PCA matrices are fitted exclusively to the training split before transforming the out-of-sample data.
+
+\subsection{Empirical Failure 3: The Ghost Matrices}
+\textbf{The Failure:} During the transition from the laboratory environment to a live inference script, the models generated profitable predictions in-sample but failed structurally out-of-sample. Forensic analysis revealed that while the PCA and Scaler matrices were fitted during data generation, they were never exported to disk. The live inference engine was attempting to feed raw, unscaled market prices into a Deep Q-Network that had learned a highly orthogonalized PCA state space.\\
+\textbf{The Solution:} We engineered a strict state-management protocol using `joblib`. The exact mathematical state of the `StandardScaler` and `PCA` transformations are dynamically exported to a dedicated `models/matrices/` directory per asset. The decoupled inference engine strictly loads these matrices before routing live broker data to the neural networks.
 
 \section{The Meta-Labeling Framework}
-A fundamental flaw in standard predictive models is conflating the ``Side" (direction) of a trade with the ``Size" (conviction). We separate these concerns using a dual-network architecture.
-
-\subsection{Primary and Secondary Agents}
+A fundamental flaw in predictive modeling is conflating trade direction with conviction. We separated these concerns via a dual-network architecture:
 \begin{itemize}
-    \item \textbf{Primary Model (DQN):} A Deep Q-Network acts as the directional signal generator, outputting discrete actions (Long, Short, Hold).
-    \item \textbf{Secondary Model (PPO):} A Proximal Policy Optimization agent acts as the meta-labeler, analyzing the orthogonalized PCA state vectors to predict the probability $p$ that the DQN's signal will be profitable.
+    \item \textbf{Primary Model (DQN):} Generates directional signals (Long, Short, Hold).
+    \item \textbf{Secondary Model (PPO):} Analyzes orthogonalized state vectors to predict the probability $p$ of the DQN's success.
 \end{itemize}
+Bet sizes $m$ are scaled continuously using the Normal Cumulative Distribution Function based on the PPO's confidence:
+$$ z = \frac{p - 0.5}{\sqrt{p(1-p)}}, \quad m = 2Z[z] - 1 $$
 
-\subsection{Continuous Bet Sizing}
-The PPO's continuous output $p \in [0, 1]$ is normalized to calculate the optimal bet size $m$. We calculate the $z$-score and derive conviction using the standard Normal Cumulative Distribution Function (CDF):
-$$ z = \frac{p - 0.5}{\sqrt{p(1-p)}} $$
-$$ m = 2Z[z] - 1 $$
-This ensures capital is deployed logarithmically in proportion to the model's statistical confidence.
+\section{Stochastic Execution Barriers (O-U Process)}
+Optimizing execution barriers alongside neural network parameters leads to curve-fitting. We isolated execution logic by modeling asset dynamics as an Ornstein-Uhlenbeck stochastic process, estimating mean reversion speed ($\varphi$) and volatility ($\sigma$):
+$$ P_{i,t} = (1 - \\varphi)E_0[P_{i,T_i}] + \\varphi P_{i,t-1} + \\sigma \\epsilon_{i,t} $$
+Dynamic Triple-Barriers are calibrated by maximizing the Sharpe ratio across 100,000 synthetic futures paths.
 
-\subsection{Network Convergence and Optimization Topology}
-To achieve policy stability, the RL agents are trained over a baseline of 1,000,000 timesteps. This extensive training horizon is mathematically necessary for the network to process the high-resolution Information-Driven Dollar Bars. It ensures the agents traverse a statistically significant variety of market regimes, including volatile breakouts and mean-reverting consolidations, allowing the policy gradient to shift successfully from random exploration to precise, calculated exploitation.
+\section{Hyperparameter Optimization and Policy Convergence}
+To achieve stability in Deep Reinforcement Learning within financial markets, compute parameters cannot be arbitrary. The architecture enforces a strict computational runway of 1,000,000 timesteps across 500 independent optimization trials.
 
-Furthermore, the architecture employs a Bayesian optimization engine utilizing the Tree-structured Parzen Estimator (TPE) to navigate the high-dimensional hyperparameter landscape (e.g., learning rates, batch sizes, gamma discounts). To guarantee convergence, the TPE algorithm executes 500 independent trials. This scale ensures the optimizer moves beyond localized, blind guessing to systematically map the performance topology, isolating and locking onto the absolute global optimal peak before out-of-sample execution.
+\subsection{Policy Convergence (1,000,000 Timesteps)}
+The data pipeline compresses extensive historical market data into high-resolution Information-Driven Dollar Bars. For the agents to reliably understand the underlying microstructure—experiencing sufficient volatile breakouts and mean-reverting consolidations—massive repetition is required. Truncating the training runway forces the neural network to memorize immediate noise. One million timesteps ensures the agent traverses the orthogonalized PCA state space sufficiently, allowing the policy to converge from stochastic exploration to calculated exploitation.
 
-\section{Execution and Risk Management}
-
-\subsection{The Optimal Trading Rule (OTR)}
-Optimizing Stop-Loss ($\underline{\pi}$) and Profit-Taking ($\bar{\pi}$) execution barriers alongside neural network hyperparameters inevitably leads to curve-fitting. We isolate execution logic by mathematically modeling the asset's underlying price dynamics as a discrete Ornstein-Uhlenbeck (O-U) process:
-$$ P_{i,t} = E_0[P_{i,T_i}] + \varphi(P_{i,t-1} - E_0[P_{i,T_i}]) + \xi_t $$
-Using an Ordinary Least Squares (OLS) regression over a rolling 60-day window, we estimate the speed of mean reversion ($\varphi$) and volatility ($\sigma$). We then generate 100,000 synthetic futures paths:
-$$ P_{i,t} = (1 - \varphi)E_0[P_{i,T_i}] + \varphi P_{i,t-1} + \sigma \epsilon_{i,t} $$
-The barriers are dynamically calibrated by grid-searching this synthetic landscape to maximize the Sharpe ratio, ensuring execution limits are driven by current market physics rather than historical noise.
+\subsection{Bayesian Topology Mapping (500 Trials)}
+Hyperparameter tuning is governed by the Optuna engine utilizing a Tree-structured Parzen Estimator (TPE). Navigating a massive, multi-dimensional landscape of learning rates, batch sizes, and network depths requires exhaustive mapping. While 20-50 trials merely sample the topology to identify regions of catastrophic failure, 500 trials ensure the algorithm systematically isolates the absolute global peak of the hyperparameter landscape, extracting maximum out-of-sample alpha.
 
 \section{Statistical Validation (CSCV)}
-To quantify the risk of multiple testing selection bias during hyperparameter optimization, we deploy Combinatorially Symmetric Cross-Validation (CSCV).
-
-A $T \times N$ matrix of out-of-sample trial performances ($T$ timesteps, $N$ evaluated hyperparameter combinations) is partitioned into $S$ sub-matrices. We evaluate all $\binom{S}{S/2}$ combinations of Training and Testing sets. For each combination $c$, we calculate the relative rank $\bar{\omega}_c$ of the optimal in-sample strategy against the out-of-sample distribution. The logit is computed as:
-$$ \lambda_c = \log\left[\frac{\bar{\omega}_c}{1 - \bar{\omega}_c}\right] $$
-The Probability of Backtest Overfitting (PBO) is the cumulative distribution of these logits below zero:
+To quantify selection bias during optimization, we deployed Combinatorially Symmetric Cross-Validation (CSCV). We partition the out-of-sample matrix and evaluate all combinations to compute the logit $\lambda_c$. The Probability of Backtest Overfitting (PBO) is the cumulative distribution below zero:
 $$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
 
 \section{Conclusion}
-By synthesizing Information-Driven data architectures, point-in-time orthogonalization, and O-U stochastic calculus within a Reinforcement Learning framework, this pipeline establishes a robust, institutionally verifiable method for algorithmic alpha generation.
+Building institutional quantitative architecture is not an exercise in avoiding failure, but in structurally harvesting it. By iteratively diagnosing and engineering solutions for data starvation, look-ahead bias, and inference state-loss, this pipeline synthesizes theoretical stochastic calculus with robust, production-grade Reinforcement Learning.
 
 \end{document}
