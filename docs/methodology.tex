@@ -28,7 +28,9 @@ Standard retail algorithmic trading relies heavily on chronological time bars (O
 \subsection{Dollar Bars and Microstructure}
 Chronological time bars oversample information during periods of low market activity and undersample during volatile market shocks. To achieve a normal, homoscedastic distribution of returns, we construct Information-Driven Dollar Bars. We sample the market only when a dynamic threshold $M$ of fiat currency is exchanged. The cumulative dollar volume $\theta_T$ at time $T$ is defined as:
 $$ \theta_T = \sum_{t=1}^{T} p_t v_t $$
-A bar is formed strictly when $\theta_T \geq M$. The threshold $M$ is dynamically calibrated using a rolling 30-day window to target a stable average of daily events, insulating the model against corporate actions like share buybacks and long-term asset appreciation.
+A bar is formed strictly when $\theta_T \geq M$. To ensure high-resolution sampling, the threshold $M$ is dynamically calibrated using a rolling 30-day window (approximately 210 hourly periods) of total Dollar Volume, scaled by a target constant $C$ (e.g., $C = 300$) to target a stable average of 10 daily events:
+$$ M_T = \frac{\sum_{i=T-210}^{T} \theta_i}{C} $$
+This dynamic calibration insulates the model against corporate actions like share buybacks and long-term asset appreciation.
 
 \subsection{Fractional Differentiation (FFD) and Stationarity}
 Machine learning models require stationary data, but standard integer differencing ($d=1$) destroys systemic memory. We apply Fixed-Width Window Fractional Differentiation (FFD). Using the binomial series expansion of the lag operator $(1-B)^d$, the weights $\omega_k$ are calculated as:
@@ -49,6 +51,11 @@ The PPO's continuous output $p \in [0, 1]$ is normalized to calculate the optima
 $$ z = \frac{p - 0.5}{\sqrt{p(1-p)}} $$
 $$ m = 2Z[z] - 1 $$
 This ensures capital is deployed logarithmically in proportion to the model's statistical confidence.
+
+\subsection{Network Convergence and Optimization Topology}
+To achieve policy stability, the RL agents are trained over a baseline of 1,000,000 timesteps. This extensive training horizon is mathematically necessary for the network to process the high-resolution Information-Driven Dollar Bars. It ensures the agents traverse a statistically significant variety of market regimes, including volatile breakouts and mean-reverting consolidations, allowing the policy gradient to shift successfully from random exploration to precise, calculated exploitation.
+
+Furthermore, the architecture employs a Bayesian optimization engine utilizing the Tree-structured Parzen Estimator (TPE) to navigate the high-dimensional hyperparameter landscape (e.g., learning rates, batch sizes, gamma discounts). To guarantee convergence, the TPE algorithm executes 500 independent trials. This scale ensures the optimizer moves beyond localized, blind guessing to systematically map the performance topology, isolating and locking onto the absolute global optimal peak before out-of-sample execution.
 
 \section{Execution and Risk Management}
 
