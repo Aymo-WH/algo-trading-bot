@@ -9,7 +9,6 @@ import random
 import os
 import re
 import joblib
-from core.utils import load_config
 from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
 from core.optimize_barriers import get_rolling_barriers
@@ -201,7 +200,7 @@ def construct_dollar_bars(df, target_bars_per_day=10):
         dollar_df.set_index('Date', inplace=True)
     return dollar_df
 
-def fetch_data():
+def fetch_data(config_path='config/config.json'):
     """
     Main data pipeline: fetches, processes, and saves financial data.
 
@@ -218,7 +217,9 @@ def fetch_data():
     sia = SentimentIntensityAnalyzer()
 
     # Load configuration
-    config = load_config()
+    import json
+    with open(config_path, 'r') as f:
+        config = json.load(f)
 
     import shutil
     # Wipe previous data to prevent cross-asset pollution
@@ -427,4 +428,8 @@ def fetch_data():
             print(f"Error splitting/saving data for {ticker}: {e}")
 
 if __name__ == "__main__":
-    fetch_data()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config/config.json')
+    args = parser.parse_args()
+    fetch_data(args.config)
