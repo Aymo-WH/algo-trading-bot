@@ -1,4 +1,15 @@
+# Ignore python cache files
 __pycache__/
-*.csv
-.DS_Store
-nvda_data.csv
+*.py[cod]
+*$py.class
+
+# Ignore data directories (Do not push raw CSVs to GitHub)
+data/train/
+data/test/
+
+# Ignore trained models and state matrices (Do not push heavy brains to GitHub)
+models/
+!models/.keep
+
+# Environment variables (Protect your future API keys)
+.env
