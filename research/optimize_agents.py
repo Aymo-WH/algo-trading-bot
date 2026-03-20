@@ -43,20 +43,21 @@ def objective(trial, timesteps, ticker):
     sharpe = np.mean(oos_returns) / np.std(oos_returns)
     return sharpe
 
-def run_optimization(n_trials=20, timesteps=10000, config_path='config/config.json'):
+def run_optimization(n_trials=20, timesteps=10000, config_path='config/config.json', specific_ticker=None):
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
-        tickers = config.get("tickers", [])
+
+        active_tickers = [specific_ticker] if specific_ticker else config.get("tickers", [])
     except Exception as e:
         print(f"Error loading config {config_path}: {e}")
         return
 
-    if not tickers:
+    if not active_tickers:
         print("No tickers found in config.")
         return
 
-    for ticker in tickers:
+    for ticker in active_tickers:
         print(f"\n{'='*40}\nOptimizing for ticker: {ticker}\n{'='*40}")
         global TRIAL_RETURNS_MATRIX
         TRIAL_RETURNS_MATRIX = {} # reset matrix per ticker
@@ -84,6 +85,7 @@ if __name__ == "__main__":
     parser.add_argument('--trials', type=int, default=10)
     parser.add_argument('--timesteps', type=int, default=10000)
     parser.add_argument('--config', type=str, default='config/config.json')
+    parser.add_argument('--ticker', type=str, default=None, help='Specific ticker to run in parallel mode')
     args = parser.parse_args()
 
-    run_optimization(n_trials=args.trials, timesteps=args.timesteps, config_path=args.config)
+    run_optimization(n_trials=args.trials, timesteps=args.timesteps, config_path=args.config, specific_ticker=args.ticker)
