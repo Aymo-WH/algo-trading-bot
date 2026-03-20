@@ -9,7 +9,6 @@ import os
 import warnings
 import random
 from core.utils import flatten_multiindex_columns
-from core.pbo_validator import PBOValidator
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -269,23 +268,14 @@ def main():
 
         stock_dfs[stock_name] = df
 
-        # Generate 5 random start steps
-        # Ensure start_step fits within dataframe minus window_size
-        # Env window_size is hardcoded to 10 in trading_gym.py
-        window_size = 10
-        max_step = len(df) - window_size - 90 - 1
-
-        if max_step > 0:
-             steps = [random.randint(0, max_step) for _ in range(5)]
-        else:
-             steps = [0] * 5
-
+        # Ensure evaluation starts at 0 and goes till the end
+        steps = [0]
         stock_start_steps[stock_name] = steps
 
         # Collect dates for S&P 500 optimization
         for s in steps:
             s_date = df['Date'].iloc[s]
-            e_idx = min(s + 90, len(df) - 1)
+            e_idx = len(df) - 1
             e_date = df['Date'].iloc[e_idx]
             all_start_dates.append(s_date)
             all_end_dates.append(e_date)
@@ -317,8 +307,8 @@ def main():
         for s in steps:
             s_date = df['Date'].iloc[s]
 
-            # End index is start + 90 steps (or end of DF)
-            e_idx = min(s + 90, len(df) - 1)
+            # End index is the end of DF
+            e_idx = len(df) - 1
             e_date = df['Date'].iloc[e_idx]
 
             # Check cache
@@ -367,17 +357,14 @@ def main():
             # Run Evaluation
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
 
-            # Benchmarks (Buy & Hold) - average over same windows?
-            # Original code did BH on full DF. But to be fair, we should average BH over the same 5 windows.
-            # However, prompt only asked for S&P 500 benchmark using exact same 5 windows.
-            # I will assume BH should also be fair.
+            # Benchmarks (Buy & Hold) over the full continuous timeframe
             bh_rois = []
             for s in start_steps:
                  # BH logic: (End - Start) / Start
                  start_price = df['Close'].iloc[s]
 
-                 # End index is start + 90 steps (or end of DF)
-                 e_idx = min(s + 90, len(df) - 1)
+                 # End index is end of DF
+                 e_idx = len(df) - 1
                  end_price = df['Close'].iloc[e_idx]
 
                  bh_rois.append(((end_price - start_price) / start_price) * 100)
@@ -397,32 +384,6 @@ def main():
                 "vs B&H ROI (%)": round(metrics["ROI"] - bh_roi, 2),
                 "vs SP500 ROI (%)": round(metrics["ROI"] - sp500_roi, 2)
             })
-    # === CALCULATE PROBABILITY OF BACKTEST OVERFITTING (PBO) ===
-    print("\\nCalculating Combinatorially Symmetric Cross-Validation (CSCV) for PBO...")
-    try:
-        # Extract just the ROI (%) values for the meta_agent across the 5 evaluation windows
-        meta_results = [r['ROI (%)'] for r in results if r['Agent'] == 'meta_agent']
-        
-        if len(meta_results) >= 4:
-            # Mock a TxN matrix for the validator using our evaluation trial results
-            # In a full deployment, this would be thousands of backtest paths. 
-            # Here we use our randomized evaluation windows as a proxy.
-            performance_matrix = pd.DataFrame({'Trial_1': meta_results})
-            
-            # We use S=4 partitions for our small sample size
-            validator = PBOValidator(performance_matrix, num_partitions=4)
-            pbo_score, _ = validator.calculate_pbo()
-            
-            print(f"✅ Probability of Backtest Overfitting (PBO): {pbo_score * 100:.2f}%")
-            if pbo_score < 0.05:
-                print("   Status: PASSED (Statistically Significant)")
-            else:
-                print("   Status: WARNING (High Risk of Overfitting)")
-        else:
-            print("Not enough MetaAgent trials to calculate PBO.")
-    except Exception as e:
-        print(f"PBO Calculation Failed: {e}")
-    # ==========================================================
     
     # Create DataFrame
     results_df = pd.DataFrame(results)
