@@ -230,7 +230,7 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
         print(f"Error fetching S&P 500: {e}")
         return 0.0, 0.0
 
-def main():
+def main(active_tickers=None):
     """
     Command-line execution flow for evaluating agents against baseline hold strategies.
     """
@@ -243,7 +243,12 @@ def main():
         return
 
     # Find Data
-    data_files = glob.glob(os.path.join(DATA_DIR, "*_data.csv"))
+    if active_tickers:
+        data_files = [os.path.join(DATA_DIR, f"{ticker}_data.csv") for ticker in active_tickers]
+        data_files = [f for f in data_files if os.path.exists(f)]
+    else:
+        data_files = glob.glob(os.path.join(DATA_DIR, "*_data.csv"))
+
     if not data_files:
         print("No data found in data/")
         return
@@ -406,4 +411,16 @@ def main():
     print("="*120)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config/config.json')
+    args = parser.parse_args()
+
+    import json
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+        active_tickers = config.get("tickers", [])
+
+    for ticker in active_tickers:
+        print(f"\nEvaluating {ticker}...")
+        main([ticker])
