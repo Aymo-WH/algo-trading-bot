@@ -14,40 +14,40 @@ This repository is an institutional-grade Reinforcement Learning trading engine 
 * **Mathematical Memory:** Real-time extraction of Principal Component Analysis (PCA) and Fractional Differentiation scaling matrices, exported dynamically to strictly prevent Look-Ahead Bias during live inference.
 
 graph TD
-classDef factory fill:#f9f2f4,stroke:#b35d7f,stroke-width:2px;
-classDef agent fill:#e6f3ff,stroke:#4a90e2,stroke-width:2px;
-classDef eval fill:#e9f5e9,stroke:#5cb85c,stroke-width:2px;
+    classDef factory fill:#f9f2f4,stroke:#b35d7f,stroke-width:2px;
+    classDef agent fill:#e6f3ff,stroke:#4a90e2,stroke-width:2px;
+    classDef eval fill:#e9f5e9,stroke:#5cb85c,stroke-width:2px;
 
-%% Data Factory Phase
-subgraph Phase 1: The Data Factory
-    A[Raw Hourly API Data] --> B{Dollar Volume > Threshold?}
-    B -- Yes --> C[Information-Driven Dollar Bar]
-    B -- No --> A
-    C --> D[Fractional Differentiation]
-    D --> E[PCA Orthogonalization]
-    E --> F[(Save Local Matrices)]
-end
-class A,B,C,D,E,F factory;
+    %% Data Factory Phase
+    subgraph Phase 1: The Data Factory
+        A[Raw Hourly API Data] --> B{Dollar Volume > Threshold?}
+        B -- Yes --> C[Information-Driven Dollar Bar]
+        B -- No --> A
+        C --> D[Fractional Differentiation]
+        D --> E[PCA Orthogonalization]
+        E --> F[(Save Local Matrices)]
+    end
+    class A,B,C,D,E,F factory;
 
-%% Alpha Search Phase
-subgraph Phase 2: Alpha Search & Meta-Labeling
-    E --> G[DQN: Directional Scout]
-    E --> H[PPO: Risk Manager]
-    G -- Long/Short/Hold --> H
-    H -- Statistical Confidence % --> I[Dynamic Trade Size]
-end
-class G,H,I agent;
+    %% Alpha Search Phase
+    subgraph Phase 2: Alpha Search & Meta-Labeling
+        E --> G[DQN: Directional Scout]
+        E --> H[PPO: Risk Manager]
+        G -- Long/Short/Hold --> H
+        H -- Statistical Confidence % --> I[Dynamic Trade Size]
+    end
+    class G,H,I agent;
 
-%% CSCV Phase
-subgraph Phase 3: Out-of-Sample Evaluation
-    I --> J[O-U Stochastic Barriers]
-    J --> K[CSCV Matrix Generator]
-    K -- Slices into 16 partitions --> L[12,870 Market Combinations]
-    L --> M{Calculate PBO}
-    M -- PBO < 5% --> N[Approve Model]
-    M -- PBO > 5% --> O[Reject & Retrain]
-end
-class J,K,L,M,N,O eval;
+    %% CSCV Phase
+    subgraph Phase 3: Out-of-Sample Evaluation
+        I --> J[O-U Stochastic Barriers]
+        J --> K[CSCV Matrix Generator]
+        K -- Slices into 16 partitions --> L[12,870 Market Combinations]
+        L --> M{Calculate PBO}
+        M -- PBO < 5% --> N[Approve Model]
+        M -- PBO > 5% --> O[Reject & Retrain]
+    end
+    class J,K,L,M,N,O eval;
 
 ### 🗺️ Development Roadmap
 
