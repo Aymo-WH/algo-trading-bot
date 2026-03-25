@@ -9,7 +9,6 @@ their proximity to optimal Profit-Taking and Stop-Loss barriers.
 import gradio as gr
 
 
-import pandas as pd
 import sys
 import os
 
