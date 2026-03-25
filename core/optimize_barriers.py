@@ -167,73 +167,67 @@ def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_g
     best_sl = None
     max_sharpe = -np.inf
 
-    # Pre-compute maxima and minima to speed up early exit checking if possible,
-    # but since paths are 15 steps long, vectorization over paths is better.
+    P = len(pt_grid)
+    S = len(sl_grid)
+
+    # Pre-calculate boolean hit masks and hit indices for each grid point
+    # We do this individually to avoid large memory allocations and caching issues
+    pt_levels = pt_grid * sigma
+    first_pt_hits = np.empty((P, num_paths), dtype=int)
+    for i, pt_level in enumerate(pt_levels):
+        hit_pt = paths >= pt_level
+        # Pad with True at the end to handle paths that never hit
+        hit_pt_padded = np.hstack([hit_pt, np.ones((num_paths, 1), dtype=bool)])
+        first_pt_hits[i] = np.argmax(hit_pt_padded, axis=1)
+
+    sl_levels = -sl_grid * sigma
+    first_sl_hits = np.empty((S, num_paths), dtype=int)
+    for j, sl_level in enumerate(sl_levels):
+        hit_sl = paths <= sl_level
+        hit_sl_padded = np.hstack([hit_sl, np.ones((num_paths, 1), dtype=bool)])
+        first_sl_hits[j] = np.argmax(hit_sl_padded, axis=1)
+
+    row_indices = np.arange(num_paths)
 
     # A path terminates immediately if it hits PT * sigma or -SL * sigma
 
-    for pt in pt_grid:
-        for sl in sl_grid:
-            pt_level = pt * sigma
-            sl_level = -sl * sigma
+    for i, pt in enumerate(pt_grid):
+        pt_level = pt_levels[i]
+        first_pt_hit = first_pt_hits[i]
 
-            # Find the first step where the path hits the PT or SL barrier
-            # Create boolean masks for hits
-            hit_pt = paths >= pt_level
-            hit_sl = paths <= sl_level
-            hit_any = hit_pt | hit_sl
+        for j, sl in enumerate(sl_grid):
+            sl_level = sl_levels[j]
+            first_sl_hit = first_sl_hits[j]
 
-            # Find the index of the first hit for each path
-            # argmax returns the first index of True. If all are False, it returns 0.
-            # We can use this, but we need to handle paths that never hit.
+            # Find the overall first hit
+            first_hit_idx = np.minimum(first_pt_hit, first_sl_hit)
 
-            # Add a dummy True at the end (column index `length`) to handle no-hit paths
-            # We'll use the last step value if no hit occurred
-            hit_any_padded = np.hstack([hit_any, np.ones((num_paths, 1), dtype=bool)])
-            first_hit_idx = np.argmax(hit_any_padded, axis=1)
-
-            # Now we extract the PnL at the exit step.
-            # If a path never hit (first_hit_idx == length), it exits at length - 1.
+            # Cap exit indices at length - 1 (for paths that didn't hit)
             exit_idx = np.minimum(first_hit_idx, length - 1)
 
-            # Get the exit PnL
-            # We need to extract the value from each row at the corresponding exit_idx
-            row_indices = np.arange(num_paths)
+            # Extract PnLs at the exit step
             exit_pnls = paths[row_indices, exit_idx]
 
-            # If it hit the PT barrier, we cap the PnL at pt_level.
-            # If it hit the SL barrier, we cap the PnL at sl_level.
-            # Wait, the prompt says "terminates immediately if it hits PT * sigma (Profit), -SL * sigma (Loss)".
-            # In real trading, if it crosses the barrier, you exit AT the barrier price (or worse/better depending on slippage, but usually we just use the barrier value).
-            # The prompt says: "A path terminates immediately if it hits PT * sigma (Profit), -SL * sigma (Loss), or reaches the end of the 15 steps."
-            # We'll assign the barrier values to the ones that hit it.
-
-            # Did it hit? first_hit_idx < length
+            # Adjust PnL based on barrier hit
             hit_mask = first_hit_idx < length
 
-            # Which one did it hit first?
-            # It could hit both in the same step, but we check PT first or SL first.
-            # Usually, we just use the value at that step. But to be exact to the prompt:
-            # Let's just clip the exit PnLs to the barriers for those that hit.
-            # Wait, if `paths[r, c] >= pt_level` is the first hit, the exact exit PnL might just be `pt_level` (limit order)
-            # or it might be `paths[r, c]` (market order).
-            # Let's just use `paths[row_indices, exit_idx]` and clip it to the barriers.
-            # Actually, standard is to use the actual barrier levels. Let's use the barrier levels for hits.
-            exit_pnls = np.where(
-                hit_mask & hit_pt[row_indices, exit_idx],
-                pt_level,
-                np.where(
-                    hit_mask & hit_sl[row_indices, exit_idx],
-                    sl_level,
-                    exit_pnls
-                )
-            )
+            # Only perform np.where if we actually have hits
+            if hit_mask.any():
+                hit_pt_at_exit = hit_mask & (exit_pnls >= pt_level)
+                hit_sl_at_exit = hit_mask & (exit_pnls <= sl_level)
 
-            mean_pnl = np.mean(exit_pnls)
+                exit_pnls = np.where(
+                    hit_pt_at_exit, pt_level,
+                    np.where(
+                        hit_sl_at_exit, sl_level, exit_pnls
+                    )
+                )
+
             std_pnl = np.std(exit_pnls)
 
             # Avoid division by zero
             if std_pnl > 0:
+                mean_pnl = np.mean(exit_pnls)
                 sharpe = mean_pnl / std_pnl
             else:
                 sharpe = 0.0
