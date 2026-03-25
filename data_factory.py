@@ -166,25 +166,29 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     current_bar_low = np.inf
     current_bar_vol = 0
 
-    for idx, row in df.iterrows():
+    # Optimization: Convert Series M to numpy array for O(1) access instead of O(N) .loc lookup
+    m_values = M.values
+
+    # Optimization: Use .itertuples() instead of .iterrows() for significant speedup
+    for i, row in enumerate(df.itertuples()):
         if current_bar_open is None:
-            current_bar_open = row['Open']
+            current_bar_open = row.Open
 
-        current_bar_high = max(current_bar_high, row['High'])
-        current_bar_low = min(current_bar_low, row['Low'])
-        current_bar_vol += row['Volume']
+        current_bar_high = max(current_bar_high, row.High)
+        current_bar_low = min(current_bar_low, row.Low)
+        current_bar_vol += row.Volume
 
-        cum_dv += row['Dollar_Volume']
+        cum_dv += row.Dollar_Volume
 
-        threshold = M.loc[idx]
+        threshold = m_values[i]
 
         if cum_dv >= threshold:
             bars.append({
-                'Date': idx,
+                'Date': row.Index,
                 'Open': current_bar_open,
                 'High': current_bar_high,
                 'Low': current_bar_low,
-                'Close': row['Close'],
+                'Close': row.Close,
                 'Volume': current_bar_vol
             })
 
