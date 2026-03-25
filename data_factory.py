@@ -412,8 +412,8 @@ def fetch_data(config_path='config/config.json'):
             raw_test_df = df[df.index >= split_date]
             # Hotfix: Dynamic Train/Test Split applied here
             
-            # IMPLEMENT 1% EMBARGO (Drop first 1% of Test Set to prevent MACD/BB leakage)
-            embargo_size = int(len(df) * 0.01)
+            # IMPLEMENT 60-PERIOD EMBARGO (Drop first 60 rows of Test Set to prevent feature leakage)
+            embargo_size = 60 # Maximum feature lookback window.
             if len(raw_test_df) > embargo_size:
                 test_df = raw_test_df.iloc[embargo_size:]
             else:
