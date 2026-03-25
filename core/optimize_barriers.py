@@ -34,9 +34,18 @@ def estimate_ou_parameters(prices: pd.Series, window: int = 15):
     Z = Z[valid]
     X = X[valid]
 
+    # Need at least 2 points to calculate covariance
+    if len(X) < 2:
+        return np.nan, np.nan
+
     # Calculate the Speed of Mean Reversion: phi = cov(Y, X) / cov(X, X)
     cov_y_x = np.cov(Y, X)[0, 1]
     cov_x_x = np.cov(X)
+
+    # Avoid division by zero if variance of X is zero
+    if cov_x_x == 0.0 or np.isnan(cov_x_x):
+        return np.nan, np.nan
+
     phi = cov_y_x / cov_x_x
 
     # Calculate the Residuals: xi = Y - Z - (phi * X)
@@ -46,7 +55,7 @@ def estimate_ou_parameters(prices: pd.Series, window: int = 15):
     cov_xi_xi = np.cov(xi)
     sigma = np.sqrt(cov_xi_xi)
 
-    return phi, sigma
+    return float(phi), float(sigma)
 
 
 def generate_synthetic_paths(phi: float, sigma: float, num_paths: int = 100000, length: int = 15):
