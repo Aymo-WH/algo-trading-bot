@@ -81,6 +81,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete)
 
+    # Ensure episode length aligns with our non-overlapping windows
+    env.episode_length = len(df) // 5
+
     roi_list = []
     cagr_list = []
     profit_list = []
@@ -188,8 +191,9 @@ def evaluate_model(dqn_model, ppo_model, ticker):
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
 
-    # Evaluate on a single chronological block from the beginning
-    steps = [0]
+    # Evaluate across 5 non-overlapping fixed windows
+    step_size = len(df) // 5
+    steps = [i * step_size for i in range(5)]
 
     meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
 
@@ -272,14 +276,16 @@ def main(active_tickers=None):
 
         stock_dfs[stock_name] = df
 
-        # Ensure evaluation starts at 0 and goes till the end
-        steps = [0]
+        # Evaluate across 5 non-overlapping fixed windows
+        step_size = len(df) // 5
+        steps = [i * step_size for i in range(5)]
         stock_start_steps[stock_name] = steps
 
         # Collect dates for S&P 500 optimization
         for s in steps:
             s_date = df['Date'].iloc[s]
-            e_idx = len(df) - 1
+            # End index is the end of the window
+            e_idx = min(s + step_size, len(df) - 1)
             e_date = df['Date'].iloc[e_idx]
             all_start_dates.append(s_date)
             all_end_dates.append(e_date)
@@ -306,13 +312,14 @@ def main(active_tickers=None):
     # Calculate Benchmarks using optimized or cached approach
     for stock_name, steps in stock_start_steps.items():
         df = stock_dfs[stock_name]
+        step_size = len(df) // 5
         sp_rois = []
         sp_cagrs = []
         for s in steps:
             s_date = df['Date'].iloc[s]
 
-            # End index is the end of DF
-            e_idx = len(df) - 1
+            # End index is the end of the window
+            e_idx = min(s + step_size, len(df) - 1)
             e_date = df['Date'].iloc[e_idx]
 
             # Check cache
@@ -361,14 +368,15 @@ def main(active_tickers=None):
             # Run Evaluation
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
 
-            # Benchmarks (Buy & Hold) over the full continuous timeframe
+            # Benchmarks (Buy & Hold) over the fixed non-overlapping windows
             bh_rois = []
+            step_size = len(df) // 5
             for s in start_steps:
                  # BH logic: (End - Start) / Start
                  start_price = df['Close'].iloc[s]
 
-                 # End index is end of DF
-                 e_idx = len(df) - 1
+                 # End index is the end of the window
+                 e_idx = min(s + step_size, len(df) - 1)
                  end_price = df['Close'].iloc[e_idx]
 
                  bh_rois.append(((end_price - start_price) / start_price) * 100)
@@ -400,7 +408,7 @@ def main(active_tickers=None):
     results_df = results_df.sort_values(by=["Agent", "Stock"])
 
     print("\n" + "="*120)
-    print("UNIFIED GLADIATOR LEADERBOARD")
+    print("STRATEGIC EVALUATION MATRIX")
     print("="*120)
     # Reorder columns
     cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Trades", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
