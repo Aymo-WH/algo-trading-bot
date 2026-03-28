@@ -204,7 +204,7 @@ def construct_dollar_bars(df, target_bars_per_day=10):
         dollar_df.set_index('Date', inplace=True)
     return dollar_df
 
-def fetch_data(config_path='config/config.json'):
+def fetch_data(config_path='config/config_phase1.json'):
     """
     Main data pipeline: fetches, processes, and saves financial data.
 
@@ -237,11 +237,12 @@ def fetch_data(config_path='config/config.json'):
 
     # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
+    data_window_days = config.get('data_window_days', 730)
 
     print(f"Fetching intraday data for {tickers}...")
     try:
         # Fetch data for all tickers at once
-        data = yf.download(tickers, period='730d', interval='1h', group_by='ticker')
+        data = yf.download(tickers, period=f"{data_window_days}d", interval='1h', group_by='ticker')
     except Exception as e:
         print(f"Error fetching data: {e}")
         return
@@ -434,6 +435,6 @@ def fetch_data(config_path='config/config.json'):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='config/config.json')
+    parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
     fetch_data(args.config)

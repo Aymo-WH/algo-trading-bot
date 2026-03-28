@@ -235,7 +235,7 @@ def run_telemetry(ticker):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='config/config.json')
+    parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
 
     import json
