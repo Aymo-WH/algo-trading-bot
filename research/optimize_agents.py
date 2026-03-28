@@ -45,7 +45,7 @@ def objective(trial, timesteps, ticker):
     sharpe = np.mean(oos_returns) / np.std(oos_returns)
     return sharpe
 
-def run_optimization(n_trials=20, timesteps=10000, config_path='config/config.json', specific_ticker=None):
+def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_phase1.json', specific_ticker=None):
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Alpha Search Engine")
     parser.add_argument('--trials', type=int, default=10)
     parser.add_argument('--timesteps', type=int, default=10000)
-    parser.add_argument('--config', type=str, default='config/config.json')
+    parser.add_argument('--config', type=str, default='config/config_phase1.json')
     parser.add_argument('--ticker', type=str, default=None, help='Specific ticker to run in parallel mode')
     args = parser.parse_args()
 

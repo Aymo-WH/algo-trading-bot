@@ -45,7 +45,7 @@ pip install -r requirements.txt
 ### 2. Build the Data Factory (The Fuel)
 Specify your asset class (e.g., Crypto, Macro ETFs) using the dynamic config argument. This process generates datasets and fitted PCA/Scaler matrices.
 ```bash
-python data_factory.py --config config/config_crypto.json
+python data_factory.py --config config/config_phase1.json
 ```
 
 ### 3. Agent Training (`train_agent.py`)
@@ -54,20 +54,20 @@ Provides core utilities (`train_dqn`, `train_ppo`) to programmatically initializ
 ### 4. Headless Optimization (`research/optimize_agents.py`)
 Run headless hyperparameter optimization using Optuna. The engine loops through the specified basket of active tickers, tracking out-of-sample returns to build a True PBO matrix.
 ```bash
-python research/optimize_agents.py --config config/config_crypto.json --trials 50 --timesteps 50000
+python research/optimize_agents.py --config config/config_phase1.json --trials 50 --timesteps 50000
 ```
 
 ### 5. Out-of-Sample Evaluation & Telemetry (`evaluate_agents.py` & `telemetry.py`)
 Evaluate models strictly on fixed chronological blocks to ensure validity. Analyze decoupled agent telemetry (Confusion Matrix, Recall, Precision, Log-Loss) and execution latency metrics.
 ```bash
-python evaluate_agents.py --config config/config_crypto.json
+python evaluate_agents.py --config config/config_phase1.json
 python telemetry.py
 ```
 
 ### 6. Live Inference Engine (`live_inference.py`)
 The core terminal execution engine. Loads Stable-Baselines3 agents alongside ticker-specific state matrices for live, real-time execution simulation.
 ```bash
-python live_inference.py --config config/config_crypto.json
+python live_inference.py --config config/config_phase1.json
 ```
 
 ---

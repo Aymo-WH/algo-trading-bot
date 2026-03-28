@@ -6,7 +6,7 @@ _CONFIG_CACHE = None
 
 def load_config() -> dict:
     """
-    Loads configuration settings from config/config.json with a module-level cache.
+    Loads configuration settings from config/config_phase1.json with a module-level cache.
 
     The config.json file controls universal simulation parameters such as the transaction
     fee percentage. Once loaded during execution, the result is cached in `_CONFIG_CACHE`
@@ -22,7 +22,7 @@ def load_config() -> dict:
 
     try:
         # Assuming config.json is in the root directory relative to execution
-        with open('config/config.json', 'r') as f:
+        with open('config/config_phase1.json', 'r') as f:
             _CONFIG_CACHE = json.load(f)
             return _CONFIG_CACHE
     except FileNotFoundError:
