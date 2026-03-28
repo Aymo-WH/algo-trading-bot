@@ -25,11 +25,11 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 
 The project follows a strict modular architecture, isolating core engine logic from laboratory tools.
 
-*   **`data_factory.py`**: The data pipeline. Fetches a rolling 730-day window of intraday data, compresses it into Information-Driven Dollar Bars, applies point-in-time PCA and FFD, and exports fitted mathematical matrices (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
-*   **`core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
-*   **`core/meta_agent.py`**: Combines the primary DQN model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
-*   **`core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
-*   **`core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
+*   **`src/data_factory.py`**: The data pipeline. Fetches a rolling 730-day window of intraday data, compresses it into Information-Driven Dollar Bars, applies point-in-time PCA and FFD, and exports fitted mathematical matrices (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
+*   **`src/core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
+*   **`src/core/meta_agent.py`**: Combines the primary DQN model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
+*   **`src/core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
+*   **`src/core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
 
 ---
 
@@ -45,10 +45,10 @@ pip install -r requirements.txt
 ### 2. Build the Data Factory (The Fuel)
 Specify your asset class (e.g., Crypto, Macro ETFs) using the dynamic config argument. This process generates datasets and fitted PCA/Scaler matrices.
 ```bash
-python data_factory.py --config config/config_crypto.json
+python src/data_factory.py --config config/config_crypto.json
 ```
 
-### 3. Agent Training (`train_agent.py`)
+### 3. Agent Training (`src/train_agent.py`)
 Provides core utilities (`train_dqn`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
 
 ### 4. Headless Optimization (`research/optimize_agents.py`)
@@ -57,17 +57,17 @@ Run headless hyperparameter optimization using Optuna. The engine loops through 
 python research/optimize_agents.py --config config/config_crypto.json --trials 50 --timesteps 50000
 ```
 
-### 5. Out-of-Sample Evaluation & Telemetry (`evaluate_agents.py` & `telemetry.py`)
+### 5. Out-of-Sample Evaluation & Telemetry (`src/evaluate_agents.py` & `src/telemetry.py`)
 Evaluate models strictly on fixed chronological blocks to ensure validity. Analyze decoupled agent telemetry (Confusion Matrix, Recall, Precision, Log-Loss) and execution latency metrics.
 ```bash
-python evaluate_agents.py --config config/config_crypto.json
-python telemetry.py
+python src/evaluate_agents.py --config config/config_crypto.json
+python src/telemetry.py
 ```
 
-### 6. Live Inference Engine (`live_inference.py`)
+### 6. Live Inference Engine (`src/live_inference.py`)
 The core terminal execution engine. Loads Stable-Baselines3 agents alongside ticker-specific state matrices for live, real-time execution simulation.
 ```bash
-python live_inference.py --config config/config_crypto.json
+python src/live_inference.py --config config/config_crypto.json
 ```
 
 ---
