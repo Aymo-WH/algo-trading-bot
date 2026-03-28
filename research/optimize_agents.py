@@ -9,7 +9,6 @@ import sys
 import os
 import json
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
 from core.pbo_validator import PBOValidator

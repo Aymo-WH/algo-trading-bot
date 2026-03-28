@@ -12,3 +12,4 @@ venv/
 .vscode/
 .idea/
 Thumbs.db
+.gradio/

@@ -1,5 +1,5 @@
 """
-Gradio Web Application for Quantitative AI Trading Dashboard.
+Gradio Web Application for The Gordian Project Dashboard.
 
 This script launches an interactive dashboard providing 'Portfolio Oversight' for the
 deployed Information-Driven Meta-Labeling architecture. It visualizes live execution metrics,
@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import evaluate_agents
 
 with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
-    gr.Markdown("# 🤖 Quantitative AI Trading Dashboard - Portfolio Oversight")
+    gr.Markdown("# 🤖 The Gordian Project Dashboard - Portfolio Oversight")
     gr.Markdown("### Architecture: Meta-Labeling (DQN Direction + PPO Bet Sizing)")
     
     # Static Pedigree Badge
