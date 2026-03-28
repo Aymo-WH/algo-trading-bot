@@ -7,3 +7,8 @@ data/test/
 models/
 !models/.keep
 .env
+node_modules/
+venv/
+.vscode/
+.idea/
+Thumbs.db
