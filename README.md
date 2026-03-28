@@ -1,6 +1,6 @@
-# The Gordian Project (Version 9.0 Cloud-Ready)
+# Quantitative AI Trading Architecture: Information-Driven Meta-Labeling (Version 9.0 Cloud-Ready)
 
-This repository implements an algorithmic trading pipeline dubbed **"The Gordian Project"**, deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.
+This repository implements an algorithmic trading pipeline dubbed **"Quantitative AI Trading Architecture: Information-Driven Meta-Labeling"**, deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.
 
 Traditional algorithmic trading relies on chronological time bars, but time is a poor metric for market activity. This engine discards the clock, instead sampling the market based on capital exchange, learning the underlying physics of different asset classes, and executing mathematically sized trades.
 
@@ -37,8 +37,8 @@ The project follows a strict modular architecture, isolating core engine logic f
 
 ### 1. Clone & Setup
 ```bash
-git clone https://github.com/aymo-wh/the-gordian-project.git
-cd the-gordian-project
+git clone https://github.com/aymo-wh/algo-trading-bot.git
+cd algo-trading-bot
 pip install -r requirements.txt
 ```
 

@@ -1,6 +1,3 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
-
 import argparse
 import optuna
 import pandas as pd
@@ -9,6 +6,7 @@ import sys
 import os
 import json
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
 from core.pbo_validator import PBOValidator
