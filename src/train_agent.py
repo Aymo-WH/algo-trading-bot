@@ -197,10 +197,19 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
         df = pd.read_csv(ticker_file)
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'])
-        # Single environment for simplicity in optimization wrapper
-        env = TradingEnv(df=df, is_discrete=is_discrete)
+        env = make_vec_env(
+            TradingEnv,
+            n_envs=max(1, multiprocessing.cpu_count() - 1),
+            env_kwargs={"df": df, "is_discrete": False},
+            vec_env_cls=SubprocVecEnv
+        )
     else:
-        env = TradingEnv(is_discrete=is_discrete, data_dir=data_dir)
+        env = make_vec_env(
+            TradingEnv,
+            n_envs=max(1, multiprocessing.cpu_count() - 1),
+            env_kwargs={"is_discrete": False, "data_dir": data_dir},
+            vec_env_cls=SubprocVecEnv
+        )
 
     model = PPO("MlpPolicy", env, verbose=0, learning_rate=learning_rate, clip_range=clip_range, ent_coef=ent_coef)
     model.learn(total_timesteps=total_timesteps)
