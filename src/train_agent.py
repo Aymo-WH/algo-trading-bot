@@ -25,8 +25,8 @@ def parse_args():
     parser.add_argument(
         "--timesteps",
         type=int,
-        default=50000,
-        help="Total timesteps to train. Default: 50000"
+        default=300000,
+        help="Total timesteps to train. Default: 300000"
     )
     parser.add_argument(
         "--data_dir",
@@ -95,8 +95,8 @@ def main():
     if args.model == "ppo":
         # Use vectorized environment for PPO to improve training speed
         # Determine number of CPUs to use
-        n_cpu = multiprocessing.cpu_count()
-        print(f"Using {n_cpu} vectorized environments for PPO training")
+        n_cpu = max(1, multiprocessing.cpu_count() - 1)
+        print(f"Igniting {n_cpu} parallel environments for PPO training...")
 
         # We use DummyVecEnv by default (when vec_env_cls is not specified) as it is often faster
         # for simple environments due to lower overhead than SubprocVecEnv.
@@ -104,9 +104,10 @@ def main():
         env = make_vec_env(
             TradingEnv,
             n_envs=n_cpu,
-            env_kwargs={"is_discrete": False, "data_dir": args.data_dir}
+            env_kwargs={"is_discrete": False, "data_dir": args.data_dir},
+            vec_env_cls=SubprocVecEnv
         )
-        model = PPO("MlpPolicy", env, verbose=1)
+        model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01)
 
     elif args.model == "dqn":
         # DQN in SB3 doesn't support vector envs in the same way for efficiency gains usually
@@ -169,7 +170,7 @@ def train_dqn(ticker, total_timesteps=10000, **kwargs):
     model.learn(total_timesteps=total_timesteps)
     return model
 
-def train_ppo(ticker, total_timesteps=10000, **kwargs):
+def train_ppo(ticker, total_timesteps=300000, **kwargs):
     """
     Trains a PPO (Proximal Policy Optimization) agent on a specific ticker.
 
@@ -178,7 +179,7 @@ def train_ppo(ticker, total_timesteps=10000, **kwargs):
 
     Args:
         ticker (str): The specific stock to train on.
-        total_timesteps (int): Number of steps to train. Defaults to 10000.
+        total_timesteps (int): Number of steps to train. Defaults to 300000.
         **kwargs: Extensible hyperparameter overrides (e.g. learning rate, clip range, entropy coef).
 
     Returns:
@@ -186,7 +187,7 @@ def train_ppo(ticker, total_timesteps=10000, **kwargs):
     """
     learning_rate = kwargs.get('ppo_lr', 3e-4)
     clip_range = kwargs.get('ppo_clip', 0.2)
-    ent_coef = kwargs.get('ppo_ent', 0.0)
+    ent_coef = kwargs.get('ppo_ent', 0.01)
 
     is_discrete = False
     data_dir = "data/train/"
