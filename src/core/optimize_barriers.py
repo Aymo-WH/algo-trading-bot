@@ -183,18 +183,20 @@ def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_g
     # We do this individually to avoid large memory allocations and caching issues
     pt_levels = pt_grid * sigma
     first_pt_hits = np.empty((P, num_paths), dtype=int)
+
+    # Pre-allocate padded array to avoid reallocation in loops
+    hit_padded = np.ones((num_paths, length + 1), dtype=bool)
+
     for i, pt_level in enumerate(pt_levels):
-        hit_pt = paths >= pt_level
-        # Pad with True at the end to handle paths that never hit
-        hit_pt_padded = np.hstack([hit_pt, np.ones((num_paths, 1), dtype=bool)])
-        first_pt_hits[i] = np.argmax(hit_pt_padded, axis=1)
+        hit_padded[:, :-1] = paths >= pt_level
+        # The padded True at the end handles paths that never hit
+        first_pt_hits[i] = np.argmax(hit_padded, axis=1)
 
     sl_levels = -sl_grid * sigma
     first_sl_hits = np.empty((S, num_paths), dtype=int)
     for j, sl_level in enumerate(sl_levels):
-        hit_sl = paths <= sl_level
-        hit_sl_padded = np.hstack([hit_sl, np.ones((num_paths, 1), dtype=bool)])
-        first_sl_hits[j] = np.argmax(hit_sl_padded, axis=1)
+        hit_padded[:, :-1] = paths <= sl_level
+        first_sl_hits[j] = np.argmax(hit_padded, axis=1)
 
     row_indices = np.arange(num_paths)
 
