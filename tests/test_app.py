@@ -17,8 +17,6 @@ mock_gr.Dataframe.update.side_effect = mock_update
 
 sys.modules["gradio"] = mock_gr
 sys.modules["evaluate_agents"] = MagicMock()
-sys.modules["pandas"] = MagicMock()
-sys.modules["numpy"] = MagicMock()
 
 # Now import update_tickers from app
 from app import update_tickers
