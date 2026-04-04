@@ -9,3 +9,4 @@ torch
 optuna
 gradio
 scipy
+runpod-flash
