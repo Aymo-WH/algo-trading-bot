@@ -78,18 +78,7 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
         except Exception as e:
             tickers = []
 
-        # Generate dummy execution rows for the specific tickers
-        rows = []
-        for i, ticker in enumerate(tickers):
-            # Deterministic dummy data for display purposes
-            entry_price = 100.0 * (i + 1)
-            current_price = entry_price * 1.05
-            dtp = f"{1.5 + i}%"
-            dsl = f"-{2.0 + i}%"
-            tb = f"{i + 2} days"
-            rows.append([ticker, entry_price, current_price, dtp, dsl, tb])
-
-        return rows
+        return gr.Dataframe.update(value=[[t, 100, 101, "2%", "-2%", "1 day"] for t in tickers])
 
     asset_class_dropdown.change(
         fn=update_tickers,
