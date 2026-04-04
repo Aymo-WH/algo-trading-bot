@@ -74,13 +74,13 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
         global TRIAL_RETURNS_MATRIX
         TRIAL_RETURNS_MATRIX = {} # reset matrix per ticker
 
-        # Create the study with the standard pruner
+        # Create the study
         study = optuna.create_study(
             direction="maximize", 
             pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=3)
         )
 
-        # FIX: The execution engine is restored!
+        # FIX: The execution engine is restored here!
         study.optimize(lambda trial: objective(trial, timesteps, ticker), n_trials=n_trials)
 
         print(f"\nBest Hyperparameters for {ticker}:", study.best_params)
