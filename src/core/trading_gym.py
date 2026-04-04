@@ -325,7 +325,12 @@ class TradingEnv(gym.Env):
         norm_cash = cash / self.initial_balance
         norm_holdings = (shares_held * current_price) / self.initial_balance
 
-        return np.concatenate((base_obs, [norm_cash, norm_holdings]))
+        n = base_obs.shape[0]
+        out = np.empty(n + 2, dtype=np.float32)
+        out[:n] = base_obs
+        out[n] = norm_cash
+        out[n + 1] = norm_holdings
+        return out
 
     def render(self, mode='human'):
         """
