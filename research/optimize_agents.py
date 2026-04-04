@@ -5,11 +5,10 @@ import argparse
 import optuna
 import pandas as pd
 import numpy as np
-import sys
-import os
 import json
 import torch
 import random
+from stable_baselines3.common.callbacks import BaseCallback
 
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
@@ -25,7 +24,8 @@ def set_global_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def objective(trial, timesteps, ticker):
     # 1. Sample Hyperparameters using Log-Uniform distributions
@@ -38,16 +38,14 @@ def objective(trial, timesteps, ticker):
 
     print(f"\n--- Trial {trial.number} ({ticker}) ---")
 
-    # 2. Train Models with these specific hyperparameters (shortened timesteps for search speed)
-    # Note: In a real architecture, train_dqn and train_ppo need to accept kwargs
+    # 2. Train Models with these specific hyperparameters
     dqn_model = train_dqn(ticker=ticker, total_timesteps=timesteps, dqn_lr=dqn_lr, dqn_target_update=dqn_target_update)
     ppo_model = train_ppo(ticker=ticker, total_timesteps=timesteps, ppo_lr=ppo_lr, ppo_clip=ppo_clip, ppo_ent=ppo_ent)
 
     # 3. Evaluate Out-Of-Sample
-    # evaluate_model must return the chronological sequence of portfolio returns
     _, _, oos_returns = evaluate_model(dqn_model, ppo_model, ticker=ticker)
 
-    # 4. Save the chronological return path to our global dictionary (The N trials)
+    # 4. Save the chronological return path to our global dictionary
     TRIAL_RETURNS_MATRIX[f"Trial_{trial.number}"] = oos_returns
 
     # 5. Calculate fitness (Sharpe Ratio proxy)
@@ -76,13 +74,18 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
         global TRIAL_RETURNS_MATRIX
         TRIAL_RETURNS_MATRIX = {} # reset matrix per ticker
 
-        study = optuna.create_study(direction="maximize", sampler=optuna.samplers.RandomSampler(seed=42))
+        # Create the study with the standard pruner
+        study = optuna.create_study(
+            direction="maximize", 
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=3)
+        )
+
+        # FIX: The execution engine is restored!
         study.optimize(lambda trial: objective(trial, timesteps, ticker), n_trials=n_trials)
 
         print(f"\nBest Hyperparameters for {ticker}:", study.best_params)
 
         # === CALCULATE PBO USING THE TRUE CSCV MATRIX ===
-        # Convert dictionary to TxN DataFrame
         performance_matrix = pd.DataFrame(TRIAL_RETURNS_MATRIX)
 
         if not performance_matrix.empty:
