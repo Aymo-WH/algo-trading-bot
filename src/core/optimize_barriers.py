@@ -193,16 +193,25 @@ def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_g
     hit_padded[:, -1] = True
 
     for i, pt_level in enumerate(pt_levels):
-        hit_padded[:, :-1] = paths >= pt_level
+        np.greater_equal(paths, pt_level, out=hit_padded[:, :-1])
         first_pt_hits[i] = np.argmax(hit_padded, axis=1)
 
     for j, sl_level in enumerate(sl_levels):
-        hit_padded[:, :-1] = paths <= sl_level
+        np.less_equal(paths, sl_level, out=hit_padded[:, :-1])
         first_sl_hits[j] = np.argmax(hit_padded, axis=1)
 
     row_indices = np.arange(num_paths)
 
     # A path terminates immediately if it hits PT * sigma or -SL * sigma
+
+    first_hit_idx = np.empty(num_paths, dtype=int)
+    exit_idx = np.empty(num_paths, dtype=int)
+    exit_pnls = np.empty(num_paths, dtype=float)
+    hit_mask = np.empty(num_paths, dtype=bool)
+    hit_pt_at_exit = np.empty(num_paths, dtype=bool)
+    hit_sl_at_exit = np.empty(num_paths, dtype=bool)
+    flat_indices = np.empty(num_paths, dtype=int)
+    base_indices = np.arange(num_paths) * length
 
     for i, pt in enumerate(pt_grid):
         pt_level = pt_levels[i]
@@ -213,28 +222,28 @@ def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_g
             first_sl_hit = first_sl_hits[j]
 
             # Find the overall first hit
-            first_hit_idx = np.minimum(first_pt_hit, first_sl_hit)
+            np.minimum(first_pt_hit, first_sl_hit, out=first_hit_idx)
 
             # Cap exit indices at length - 1 (for paths that didn't hit)
-            exit_idx = np.minimum(first_hit_idx, length - 1)
+            np.minimum(first_hit_idx, length - 1, out=exit_idx)
 
             # Extract PnLs at the exit step
-            exit_pnls = paths[row_indices, exit_idx]
+            np.add(base_indices, exit_idx, out=flat_indices)
+            np.take(paths.ravel(), flat_indices, out=exit_pnls)
 
             # Adjust PnL based on barrier hit
-            hit_mask = first_hit_idx < length
+            np.less(first_hit_idx, length, out=hit_mask)
 
             # Only perform np.where if we actually have hits
             if hit_mask.any():
-                hit_pt_at_exit = hit_mask & (exit_pnls >= pt_level)
-                hit_sl_at_exit = hit_mask & (exit_pnls <= sl_level)
+                np.greater_equal(exit_pnls, pt_level, out=hit_pt_at_exit)
+                np.logical_and(hit_mask, hit_pt_at_exit, out=hit_pt_at_exit)
 
-                exit_pnls = np.where(
-                    hit_pt_at_exit, pt_level,
-                    np.where(
-                        hit_sl_at_exit, sl_level, exit_pnls
-                    )
-                )
+                np.less_equal(exit_pnls, sl_level, out=hit_sl_at_exit)
+                np.logical_and(hit_mask, hit_sl_at_exit, out=hit_sl_at_exit)
+
+                np.copyto(exit_pnls, sl_level, where=hit_sl_at_exit)
+                np.copyto(exit_pnls, pt_level, where=hit_pt_at_exit)
 
             std_pnl = np.std(exit_pnls)
 

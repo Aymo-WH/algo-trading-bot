@@ -129,6 +129,9 @@ class TradingEnv(gym.Env):
             low=-np.inf, high=np.inf, shape=(self.window_size, 9), dtype=np.float32
         )
 
+        self.obs_buffer = np.empty((self.window_size, self.observation_space.shape[1]), dtype=np.float32)
+        self._forced_sell_action = np.array([-1.0], dtype=np.float32)
+
         self.initial_balance = 10000.0
         self.current_step = 0
         self.episode_length = 90
@@ -183,14 +186,11 @@ class TradingEnv(gym.Env):
         self.net_worth = 10000.0
         self.total_fees = 0.0
 
-        self.obs_deque = deque(maxlen=self.window_size)
-
-        # Populate initial deque
+        # Populate initial buffer
         for i in range(self.window_size):
-            obs_step = self._get_single_observation(self.current_step + i, self.cash, self.shares_held)
-            self.obs_deque.append(obs_step)
+            self._get_single_observation(self.current_step + i, self.cash, self.shares_held, self.obs_buffer[i])
 
-        observation = np.array(self.obs_deque, dtype=np.float32)
+        observation = self.obs_buffer
         info = {}
         return observation, info
 
@@ -236,7 +236,7 @@ class TradingEnv(gym.Env):
             if self.is_discrete:
                 action = 0  # Assuming 0 maps to -1.0 in your mapping dict
             else:
-                action = np.array([-1.0])
+                action = self._forced_sell_action
 
         # ETF TRICK: Track pure mark-to-market before rebalancing
         prev_val = self.cash + (self.shares_held * current_price)
@@ -309,12 +309,12 @@ class TradingEnv(gym.Env):
         if pure_new_val < 1000:
             terminated = True
                 
-        new_obs_step = self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held)
-        self.obs_deque.append(new_obs_step)
+        self.obs_buffer[:-1] = self.obs_buffer[1:]
+        self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held, self.obs_buffer[-1])
     
-        return np.array(self.obs_deque, dtype=np.float32), reward, terminated, truncated, {'step_fee': step_fee}
+        return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
 
-    def _get_single_observation(self, step_idx, cash, shares_held):
+    def _get_single_observation(self, step_idx, cash, shares_held, target_array):
         if step_idx < len(self.obs_matrix):
             base_obs = self.obs_matrix[step_idx]
             current_price = self._prices[step_idx]
@@ -326,11 +326,9 @@ class TradingEnv(gym.Env):
         norm_holdings = (shares_held * current_price) / self.initial_balance
 
         n = base_obs.shape[0]
-        out = np.empty(n + 2, dtype=np.float32)
-        out[:n] = base_obs
-        out[n] = norm_cash
-        out[n + 1] = norm_holdings
-        return out
+        target_array[:n] = base_obs
+        target_array[n] = norm_cash
+        target_array[n + 1] = norm_holdings
 
     def render(self, mode='human'):
         """
