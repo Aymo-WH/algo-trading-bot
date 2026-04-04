@@ -8,6 +8,8 @@ import numpy as np
 import sys
 import os
 import json
+import torch
+import random
 
 from train_agent import train_dqn, train_ppo
 from evaluate_agents import evaluate_model
@@ -15,6 +17,15 @@ from core.pbo_validator import PBOValidator
 
 # Global matrix to store the out-of-sample return series for every trial
 TRIAL_RETURNS_MATRIX = {}
+
+def set_global_seed(seed=42):
+    """
+    Sets the global seed for deterministic reproducibility.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def objective(trial, timesteps, ticker):
     # 1. Sample Hyperparameters using Log-Uniform distributions
@@ -46,6 +57,7 @@ def objective(trial, timesteps, ticker):
     return sharpe
 
 def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_phase1.json', specific_ticker=None):
+    set_global_seed(42)
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -64,7 +76,7 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
         global TRIAL_RETURNS_MATRIX
         TRIAL_RETURNS_MATRIX = {} # reset matrix per ticker
 
-        study = optuna.create_study(direction="maximize", sampler=optuna.samplers.RandomSampler())
+        study = optuna.create_study(direction="maximize", sampler=optuna.samplers.RandomSampler(seed=42))
         study.optimize(lambda trial: objective(trial, timesteps, ticker), n_trials=n_trials)
 
         print(f"\nBest Hyperparameters for {ticker}:", study.best_params)

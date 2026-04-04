@@ -6,6 +6,18 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 import multiprocessing
+import torch
+import random
+import numpy as np
+
+def set_global_seed(seed=42):
+    """
+    Sets the global seed for deterministic reproducibility.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def parse_args():
     """
@@ -72,6 +84,7 @@ def main():
     """
     Command-line execution flow for standalone model training.
     """
+    set_global_seed(42)
     args = parse_args()
 
     # Validate paths
@@ -104,18 +117,21 @@ def main():
         env = make_vec_env(
             TradingEnv,
             n_envs=n_cpu,
+            seed=42,
             env_kwargs={"is_discrete": False, "data_dir": args.data_dir},
             vec_env_cls=SubprocVecEnv
         )
-        model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01)
+        env.action_space.seed(42)
+        model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01, seed=42)
 
     elif args.model == "dqn":
         # DQN in SB3 doesn't support vector envs in the same way for efficiency gains usually
         # and requires discrete actions
         is_discrete = True
         env = TradingEnv(is_discrete=is_discrete, data_dir=args.data_dir)
+        env.action_space.seed(42)
         # Original DQN script used target_update_interval=500
-        model = DQN("MlpPolicy", env, verbose=1, target_update_interval=500)
+        model = DQN("MlpPolicy", env, verbose=1, target_update_interval=500, seed=42)
 
     # Command the model to learn
     model.learn(total_timesteps=args.timesteps)
@@ -142,6 +158,8 @@ def train_dqn(ticker, total_timesteps=10000, **kwargs):
     Returns:
         stable_baselines3.DQN: The trained primary agent.
     """
+    set_global_seed(42)
+
     # Determine learning rate and target update interval from kwargs
     learning_rate = kwargs.get('dqn_lr', 1e-4)
     target_update_interval = kwargs.get('dqn_target_update', 1000)
@@ -166,7 +184,9 @@ def train_dqn(ticker, total_timesteps=10000, **kwargs):
         # Fallback to loading all if specific ticker file not found (though unexpected)
         env = TradingEnv(is_discrete=is_discrete, data_dir=data_dir)
 
-    model = DQN("MlpPolicy", env, verbose=0, learning_rate=learning_rate, target_update_interval=target_update_interval)
+    env.action_space.seed(42)
+
+    model = DQN("MlpPolicy", env, verbose=0, learning_rate=learning_rate, target_update_interval=target_update_interval, seed=42)
     model.learn(total_timesteps=total_timesteps)
     return model
 
@@ -185,6 +205,8 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
     Returns:
         stable_baselines3.PPO: The trained secondary agent.
     """
+    set_global_seed(42)
+
     learning_rate = kwargs.get('ppo_lr', 3e-4)
     clip_range = kwargs.get('ppo_clip', 0.2)
     ent_coef = kwargs.get('ppo_ent', 0.01)
@@ -200,6 +222,7 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
         env = make_vec_env(
             TradingEnv,
             n_envs=max(1, multiprocessing.cpu_count() - 1),
+            seed=42,
             env_kwargs={"df": df, "is_discrete": False},
             vec_env_cls=SubprocVecEnv
         )
@@ -207,10 +230,13 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
         env = make_vec_env(
             TradingEnv,
             n_envs=max(1, multiprocessing.cpu_count() - 1),
+            seed=42,
             env_kwargs={"is_discrete": False, "data_dir": data_dir},
             vec_env_cls=SubprocVecEnv
         )
 
-    model = PPO("MlpPolicy", env, verbose=0, learning_rate=learning_rate, clip_range=clip_range, ent_coef=ent_coef)
+    env.action_space.seed(42)
+
+    model = PPO("MlpPolicy", env, verbose=0, learning_rate=learning_rate, clip_range=clip_range, ent_coef=ent_coef, seed=42)
     model.learn(total_timesteps=total_timesteps)
     return model
