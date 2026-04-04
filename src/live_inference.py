@@ -1,9 +1,13 @@
 import argparse
 import json
 import os
-import joblib
 import random
-from stable_baselines3 import DQN, PPO
+try:
+    import joblib
+    from stable_baselines3 import DQN, PPO
+    HAS_DEPENDENCIES = True
+except ImportError:
+    HAS_DEPENDENCIES = False
 
 def run_live_inference(config_path):
     print("[SYSTEM] Booting Live Inference Engine...")
@@ -30,34 +34,40 @@ def run_live_inference(config_path):
     ppo_path = "models/ppo_meta_labeler.zip"
 
     # Try to load models. Just a simulation check to make sure they'd load
-    try:
-        # Load models if they exist, otherwise just simulate it so the script doesn't completely crash if models aren't generated yet.
-        if os.path.exists(dqn_path) and os.path.exists(ppo_path):
-            dqn_model = DQN.load(dqn_path)
-            ppo_model = PPO.load(ppo_path)
-            print("[SYSTEM] Brains Loaded.")
-        else:
-            print("[WARNING] Stable-Baselines3 models not found in 'models/'. Simulated load.")
-    except Exception as e:
-        print(f"[WARNING] Could not load Stable-Baselines3 models: {e}. Simulated load.")
+    if HAS_DEPENDENCIES:
+        try:
+            # Load models if they exist, otherwise just simulate it so the script doesn't completely crash if models aren't generated yet.
+            if os.path.exists(dqn_path) and os.path.exists(ppo_path):
+                dqn_model = DQN.load(dqn_path)
+                ppo_model = PPO.load(ppo_path)
+                print("[SYSTEM] Brains Loaded.")
+            else:
+                print("[WARNING] Stable-Baselines3 models not found in 'models/'. Simulated load.")
+        except Exception as e:
+            print(f"[WARNING] Could not load Stable-Baselines3 models: {e}. Simulated load.")
+    else:
+        print("[WARNING] Dependencies (joblib, stable-baselines3) missing. Skipping model/matrix load.")
 
     # Load Matrices
     matrices_aligned = True
-    for ticker in tickers:
-        clean_ticker = os.path.basename(ticker)
-        scaler_path = f"models/matrices/scaler_{clean_ticker}.pkl"
-        pca_path = f"models/matrices/pca_{clean_ticker}.pkl"
+    if HAS_DEPENDENCIES:
+        for ticker in tickers:
+            clean_ticker = os.path.basename(ticker)
+            scaler_path = f"models/matrices/scaler_{clean_ticker}.pkl"
+            pca_path = f"models/matrices/pca_{clean_ticker}.pkl"
 
-        if os.path.exists(scaler_path) and os.path.exists(pca_path):
-            try:
-                scaler = joblib.load(scaler_path)
-                pca = joblib.load(pca_path)
-            except Exception as e:
-                print(f"[ERROR] Failed to load matrices for {ticker}: {e}")
+            if os.path.exists(scaler_path) and os.path.exists(pca_path):
+                try:
+                    scaler = joblib.load(scaler_path)
+                    pca = joblib.load(pca_path)
+                except Exception as e:
+                    print(f"[ERROR] Failed to load matrices for {ticker}: {e}")
+                    matrices_aligned = False
+            else:
+                print(f"[WARNING] Matrices for {ticker} not found.")
                 matrices_aligned = False
-        else:
-            print(f"[WARNING] Matrices for {ticker} not found.")
-            matrices_aligned = False
+    else:
+        matrices_aligned = False
 
     if matrices_aligned:
         print("[SYSTEM] Scaler & PCA Matrices Aligned.")
@@ -77,8 +87,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Handle passing "config_crypto.json" instead of "config/config_crypto.json"
-    config_path = args.config
-    if not os.path.exists(config_path) and os.path.exists(os.path.join("config", config_path)):
-        config_path = os.path.join("config", config_path)
+    input_path = args.config
 
-    run_live_inference(config_path)
+    # Security Fix: Prevent Path Traversal
+    # 1. Resolve project root and allowed config directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    allowed_config_dir = os.path.normpath(os.path.join(project_root, "config"))
+
+    # 2. If it's a simple filename, assume it's in the 'config/' directory.
+    # Otherwise, treat it as a relative or absolute path.
+    if os.path.dirname(input_path) == "":
+        config_path = os.path.join(allowed_config_dir, input_path)
+    else:
+        # Resolve relative to project root if not absolute
+        if not os.path.isabs(input_path):
+            config_path = os.path.join(project_root, input_path)
+        else:
+            config_path = input_path
+
+    # 3. Final Security Validation: Resolve absolute path and verify it's within 'config/'
+    abs_config_path = os.path.normpath(os.path.abspath(config_path))
+
+    if not abs_config_path.startswith(allowed_config_dir + os.sep):
+        print(f"[ERROR] Security: Configuration path '{input_path}' is restricted.")
+    else:
+        run_live_inference(abs_config_path)

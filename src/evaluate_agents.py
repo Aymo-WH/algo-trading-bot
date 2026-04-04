@@ -17,6 +17,9 @@ MODELS_DIR = "models/"
 DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
 
+# Global cache for S&P 500 benchmark data to prevent redundant downloads
+_GSPC_CACHE = None
+
 def load_agent(model_path):
     """
     Loads a trained reinforcement learning agent from disk.
@@ -74,9 +77,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     Returns:
         dict: Performance metrics averaged across all evaluated steps.
     """
-    # Ensure Date is datetime
-    if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'])
 
     # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete)
@@ -203,17 +203,45 @@ def evaluate_model(dqn_model, ppo_model, ticker):
     return None, None, metrics["daily_returns"]
 
 def get_benchmark_sp500(start_date, end_date, sp500_df=None):
-    # Fetch S&P 500 data
+    """
+    Retrieves S&P 500 benchmark performance with optimized caching and slicing.
+
+    Args:
+        start_date (datetime): Beginning of the evaluation window.
+        end_date (datetime): End of the evaluation window.
+        sp500_df (pd.DataFrame, optional): A pre-fetched benchmark DataFrame.
+    """
+    global _GSPC_CACHE
     try:
-        if sp500_df is not None:
-            # Optimize: Slice from pre-fetched dataframe
-            # Use boolean mask to respect boundaries [start, end)
-            mask = (sp500_df.index >= start_date) & (sp500_df.index < end_date)
-            sp500 = sp500_df[mask]
-        else:
-            # Download usually returns index as Date
-            sp500 = yf.download("^GSPC", start=start_date, end=end_date, progress=False)
-            sp500 = flatten_multiindex_columns(sp500)
+        source_df = sp500_df if sp500_df is not None else _GSPC_CACHE
+
+        # Download if we don't have a source or if dates are out of bounds
+        is_covered = (
+            source_df is not None and
+            not source_df.empty and
+            source_df.index[0] <= start_date and
+            source_df.index[-1] >= end_date
+        )
+
+        if not is_covered:
+            # Download missing portion (with small buffer)
+            new_data = yf.download("^GSPC", start=start_date, end=end_date + pd.Timedelta(days=1), progress=False)
+            new_data = flatten_multiindex_columns(new_data)
+
+            if _GSPC_CACHE is None:
+                _GSPC_CACHE = new_data
+            else:
+                _GSPC_CACHE = pd.concat([_GSPC_CACHE, new_data]).drop_duplicates().sort_index()
+
+            source_df = _GSPC_CACHE
+
+        if source_df is None or source_df.empty:
+            return 0.0, 0.0
+
+        # O(log N) slicing using searchsorted for DatetimeIndex
+        start_idx = source_df.index.searchsorted(start_date)
+        end_idx = source_df.index.searchsorted(end_date)
+        sp500 = source_df.iloc[start_idx:end_idx]
 
         if sp500.empty:
             return 0.0, 0.0
@@ -295,19 +323,34 @@ def main(active_tickers=None):
     if all_start_dates:
         global_min_date = min(all_start_dates)
         global_max_date = max(all_end_dates)
+
+        global _GSPC_CACHE
         # Add a buffer day to ensure end date is covered (yfinance is exclusive on end)
         global_max_date_buffer = global_max_date + pd.Timedelta(days=1)
 
-        try:
-            print(f"Fetching S&P 500 benchmark data from {global_min_date.date()} to {global_max_date_buffer.date()}...")
-            global_sp500_df = yf.download("^GSPC", start=global_min_date, end=global_max_date_buffer, progress=False)
-            global_sp500_df = flatten_multiindex_columns(global_sp500_df)
-            if global_sp500_df.empty:
-                 print("Warning: Fetched S&P 500 data is empty.")
-                 global_sp500_df = None
-        except Exception as e:
-            print(f"Error pre-fetching S&P 500 data: {e}")
-            global_sp500_df = None
+        # Check if cache covers the required range
+        is_covered = (
+            _GSPC_CACHE is not None and
+            not _GSPC_CACHE.empty and
+            _GSPC_CACHE.index[0] <= global_min_date and
+            _GSPC_CACHE.index[-1] >= global_max_date
+        )
+
+        if not is_covered:
+            try:
+                print(f"Fetching S&P 500 benchmark data from {global_min_date.date()} to {global_max_date_buffer.date()}...")
+                new_data = yf.download("^GSPC", start=global_min_date, end=global_max_date_buffer, progress=False)
+                new_data = flatten_multiindex_columns(new_data)
+
+                if _GSPC_CACHE is None:
+                    _GSPC_CACHE = new_data
+                else:
+                    _GSPC_CACHE = pd.concat([_GSPC_CACHE, new_data]).drop_duplicates().sort_index()
+
+            except Exception as e:
+                print(f"Error pre-fetching S&P 500 data: {e}")
+
+        global_sp500_df = _GSPC_CACHE
 
     # Calculate Benchmarks using optimized or cached approach
     for stock_name, steps in stock_start_steps.items():
@@ -428,6 +471,7 @@ if __name__ == "__main__":
         config = json.load(f)
         active_tickers = config.get("tickers", [])
 
-    for ticker in active_tickers:
-        print(f"\nEvaluating {ticker}...")
-        main([ticker])
+    if active_tickers:
+        main(active_tickers)
+    else:
+        main()
