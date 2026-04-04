@@ -1,4 +1,5 @@
 __pycache__/
+.flash/
 *.py[cod]
 *$py.class
 .DS_Store
