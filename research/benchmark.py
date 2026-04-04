@@ -1,5 +1,9 @@
 import time
 import numpy as np
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import src.core.optimize_barriers as ob
 
 def evaluate_barriers_optimized(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_grid: np.ndarray):
     num_paths, length = paths.shape
@@ -12,18 +16,24 @@ def evaluate_barriers_optimized(paths: np.ndarray, sigma: float, pt_grid: np.nda
 
     pt_levels = pt_grid * sigma
     first_pt_hits = np.empty((P, num_paths), dtype=int)
-    padding_col = np.ones((num_paths, 1), dtype=bool)
+
+    # Pre-allocate the padded boolean array ONCE
+    # shape (num_paths, length + 1)
+    # last column is always True
+    hit_padded = np.empty((num_paths, length + 1), dtype=bool)
+    hit_padded[:, -1] = True
+
     for i, pt_level in enumerate(pt_levels):
-        hit_pt = paths >= pt_level
-        hit_pt_padded = np.hstack([hit_pt, padding_col])
-        first_pt_hits[i] = np.argmax(hit_pt_padded, axis=1)
+        # Write directly into the view of the first `length` columns
+        hit_padded[:, :-1] = paths >= pt_level
+        first_pt_hits[i] = np.argmax(hit_padded, axis=1)
 
     sl_levels = -sl_grid * sigma
     first_sl_hits = np.empty((S, num_paths), dtype=int)
+
     for j, sl_level in enumerate(sl_levels):
-        hit_sl = paths <= sl_level
-        hit_sl_padded = np.hstack([hit_sl, padding_col])
-        first_sl_hits[j] = np.argmax(hit_sl_padded, axis=1)
+        hit_padded[:, :-1] = paths <= sl_level
+        first_sl_hits[j] = np.argmax(hit_padded, axis=1)
 
     row_indices = np.arange(num_paths)
 
@@ -64,16 +74,22 @@ def evaluate_barriers_optimized(paths: np.ndarray, sigma: float, pt_grid: np.nda
 
     return best_pt, best_sl, max_sharpe
 
-# create synthetic paths
-np.random.seed(42)
-paths = np.random.normal(0, 1, size=(100000, 15))
-sigma = 1.0
-pt_grid = np.arange(0.5, 3.25, 0.25)
-sl_grid = np.arange(0.5, 3.25, 0.25)
+if __name__ == "__main__":
+    # create synthetic paths
+    np.random.seed(42)
+    paths = np.random.normal(0, 1, size=(100000, 15))
+    sigma = 1.0
+    pt_grid = np.arange(0.5, 3.25, 0.25)
+    sl_grid = np.arange(0.5, 3.25, 0.25)
 
-start_time = time.time()
-for _ in range(10): # run multiple times
-    evaluate_barriers_optimized(paths, sigma, pt_grid, sl_grid)
-end_time = time.time()
+    start_time = time.time()
+    for _ in range(50):
+        evaluate_barriers_optimized(paths, sigma, pt_grid, sl_grid)
+    end_time = time.time()
+    print(f"Optimized Time: {end_time - start_time:.4f} seconds")
 
-print(f"Optimized Time: {end_time - start_time:.4f} seconds")
+    start_time = time.time()
+    for _ in range(50):
+        ob.evaluate_barriers(paths, sigma, pt_grid, sl_grid)
+    end_time = time.time()
+    print(f"Original Time: {end_time - start_time:.4f} seconds")
