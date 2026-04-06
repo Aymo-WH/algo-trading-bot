@@ -1,10 +1,10 @@
 {
   "tickers": [
-    "XLK",
-    "XLF",
-    "XLE"
+    "GLD",
+    "SLV",
+    "USO"
   ],
-  "start_date": "2004-01-01",
+  "start_date": "2006-01-01",
   "end_date": "2024-01-01",
   "interval": "1d",
   "transaction_fee_percent": 0.001
