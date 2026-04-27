@@ -172,92 +172,59 @@ def evaluate_barriers(paths: np.ndarray, sigma: float, pt_grid: np.ndarray, sl_g
         tuple: (best_pt, best_sl, max_sharpe) the optimal multipliers and their expected Sharpe Ratio.
     """
     num_paths, length = paths.shape
-    best_pt = None
-    best_sl = None
-    max_sharpe = -np.inf
-
     P = len(pt_grid)
     S = len(sl_grid)
 
-    # Pre-calculate boolean hit masks and hit indices for each grid point
-    # We do this individually to avoid large memory allocations and caching issues
     pt_levels = pt_grid * sigma
     sl_levels = -sl_grid * sigma
 
+    # First hits arrays
     first_pt_hits = np.empty((P, num_paths), dtype=int)
     first_sl_hits = np.empty((S, num_paths), dtype=int)
 
-    # Pre-allocate padded array once to avoid repeated np.ones and np.hstack inside loops
     hit_padded = np.empty((num_paths, length + 1), dtype=bool)
-    # Pad with True at the end to handle paths that never hit
     hit_padded[:, -1] = True
 
     for i, pt_level in enumerate(pt_levels):
-        np.greater_equal(paths, pt_level, out=hit_padded[:, :-1])
+        hit_padded[:, :-1] = paths >= pt_level
         first_pt_hits[i] = np.argmax(hit_padded, axis=1)
 
     for j, sl_level in enumerate(sl_levels):
-        np.less_equal(paths, sl_level, out=hit_padded[:, :-1])
+        hit_padded[:, :-1] = paths <= sl_level
         first_sl_hits[j] = np.argmax(hit_padded, axis=1)
 
-    row_indices = np.arange(num_paths)
+    # 3D broadcasting
+    first_pt_hit_3d = first_pt_hits[:, np.newaxis, :]  # (P, 1, num_paths)
+    first_sl_hit_3d = first_sl_hits[np.newaxis, :, :]  # (1, S, num_paths)
 
-    # A path terminates immediately if it hits PT * sigma or -SL * sigma
+    first_hit_idx = np.minimum(first_pt_hit_3d, first_sl_hit_3d)  # (P, S, num_paths)
+    exit_idx = np.minimum(first_hit_idx, length - 1)  # (P, S, num_paths)
 
-    first_hit_idx = np.empty(num_paths, dtype=int)
-    exit_idx = np.empty(num_paths, dtype=int)
-    exit_pnls = np.empty(num_paths, dtype=float)
-    hit_mask = np.empty(num_paths, dtype=bool)
-    hit_pt_at_exit = np.empty(num_paths, dtype=bool)
-    hit_sl_at_exit = np.empty(num_paths, dtype=bool)
-    flat_indices = np.empty(num_paths, dtype=int)
-    base_indices = np.arange(num_paths) * length
+    row_idx = np.arange(num_paths) # (num_paths,)
+    exit_pnls = paths[row_idx, exit_idx]  # (P, S, num_paths)
 
-    for i, pt in enumerate(pt_grid):
-        pt_level = pt_levels[i]
-        first_pt_hit = first_pt_hits[i]
+    hit_mask = first_hit_idx < length
 
-        for j, sl in enumerate(sl_grid):
-            sl_level = sl_levels[j]
-            first_sl_hit = first_sl_hits[j]
+    pt_levels_3d = pt_levels[:, np.newaxis, np.newaxis]
+    sl_levels_3d = sl_levels[np.newaxis, :, np.newaxis]
 
-            # Find the overall first hit
-            np.minimum(first_pt_hit, first_sl_hit, out=first_hit_idx)
+    hit_pt_at_exit = hit_mask & (exit_pnls >= pt_levels_3d)
+    hit_sl_at_exit = hit_mask & (exit_pnls <= sl_levels_3d)
 
-            # Cap exit indices at length - 1 (for paths that didn't hit)
-            np.minimum(first_hit_idx, length - 1, out=exit_idx)
+    exit_pnls = np.where(hit_pt_at_exit, pt_levels_3d,
+                         np.where(hit_sl_at_exit, sl_levels_3d, exit_pnls))
 
-            # Extract PnLs at the exit step
-            np.add(base_indices, exit_idx, out=flat_indices)
-            np.take(paths.ravel(), flat_indices, out=exit_pnls)
+    # Calculate sharpe for each P, S combination
+    std_pnls = np.std(exit_pnls, axis=2)
+    mean_pnls = np.mean(exit_pnls, axis=2)
 
-            # Adjust PnL based on barrier hit
-            np.less(first_hit_idx, length, out=hit_mask)
+    # Avoid division by zero
+    sharpes = np.divide(mean_pnls, std_pnls, out=np.zeros_like(mean_pnls), where=std_pnls!=0)
 
-            # Only perform np.where if we actually have hits
-            if hit_mask.any():
-                np.greater_equal(exit_pnls, pt_level, out=hit_pt_at_exit)
-                np.logical_and(hit_mask, hit_pt_at_exit, out=hit_pt_at_exit)
-
-                np.less_equal(exit_pnls, sl_level, out=hit_sl_at_exit)
-                np.logical_and(hit_mask, hit_sl_at_exit, out=hit_sl_at_exit)
-
-                np.copyto(exit_pnls, sl_level, where=hit_sl_at_exit)
-                np.copyto(exit_pnls, pt_level, where=hit_pt_at_exit)
-
-            std_pnl = np.std(exit_pnls)
-
-            # Avoid division by zero
-            if std_pnl > 0:
-                mean_pnl = np.mean(exit_pnls)
-                sharpe = mean_pnl / std_pnl
-            else:
-                sharpe = 0.0
-
-            if sharpe > max_sharpe:
-                max_sharpe = sharpe
-                best_pt = pt
-                best_sl = sl
+    max_idx = np.unravel_index(np.argmax(sharpes, axis=None), sharpes.shape)
+    best_pt = pt_grid[max_idx[0]]
+    best_sl = sl_grid[max_idx[1]]
+    max_sharpe = sharpes[max_idx]
 
     return best_pt, best_sl, max_sharpe
 
