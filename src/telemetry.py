@@ -29,91 +29,88 @@ def run_telemetry(ticker):
         df['Date'] = pd.to_datetime(df['Date'])
 
     # Load Models
-    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip"))
-    dqn_model = None
+    xgb_model = None
     ppo_model = None
 
-    for mf in model_files:
-        if "dqn" in mf.lower():
-            dqn_model = load_agent(mf)
-        elif "ppo" in mf.lower():
-            ppo_model = load_agent(mf)
+    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
+    ppo_path = os.path.join(MODELS_DIR, "ppo_meta_labeler.zip")
 
-    if dqn_model is None or ppo_model is None:
-        print("Both DQN and PPO models must be present in models/ directory.")
+    if os.path.exists(xgb_path):
+        xgb_model = load_agent(xgb_path)
+    if os.path.exists(ppo_path):
+        ppo_model = load_agent(ppo_path)
+
+    if xgb_model is None or ppo_model is None:
+        print("Both XGBoost and PPO models must be present in models/ directory.")
         return
 
-    meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
+    meta_agent = MetaAgent(xgb_model=xgb_model, ppo_model=ppo_model, step_size=0.10)
 
     # -------------------------------------------------------------------------
-    # RUN ISOLATED DQN (Flat 1-unit bet size)
+    # RUN ISOLATED XGBoost (Flat 1-unit bet size)
     # -------------------------------------------------------------------------
-    env_dqn = TradingEnv(df=df, is_discrete=True)
-    obs, _ = env_dqn.reset(options={'start_step': 0})
+    # We use a non-discrete env but without PPO, just outputting XGB signal
+    env_xgb = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path)
+    obs, _ = env_xgb.reset(options={'start_step': 0})
 
-    dqn_y_true = []
-    dqn_y_pred = []
+    xgb_y_true = []
+    xgb_y_pred = []
 
-    dqn_inference_times = []
-    dqn_reconstruction_times = []
+    xgb_inference_times = []
+    xgb_reconstruction_times = []
 
     terminated = False
     truncated = False
 
-    # Mapping for DQN
-    dqn_mapping = {0: -1, 1: -0.5, 2: 0, 3: 0.5, 4: 1}
-
     while not (terminated or truncated):
-        # Match observation shape
-        obs_for_pred = obs
-        if dqn_model.observation_space.shape[-1] < obs.shape[-1]:
-            obs_for_pred = obs[..., :dqn_model.observation_space.shape[-1]]
-
         t0 = time.perf_counter()
-        action, _ = dqn_model.predict(obs_for_pred, deterministic=True)
+
+        # XGBoost signal is the first element of observation
+        xgb_signal = obs[0]
+        action = np.array([np.sign(xgb_signal)])
+
         t1 = time.perf_counter()
-        dqn_inference_times.append((t1 - t0) * 1000) # ms
+        xgb_inference_times.append((t1 - t0) * 1000) # ms
 
         # Predict 1 (Long) if direction > 0, else 0 (Hold)
-        direction = dqn_mapping[int(action)]
-        predicted_class = 1 if direction > 0 else 0
+        predicted_class = 1 if xgb_signal > 0 else 0
 
         # Get next price to determine actual label
-        current_step = env_dqn.current_step
-        decision_idx = current_step + env_dqn.window_size - 1
-        current_price = env_dqn._prices[decision_idx]
+        current_step = env_xgb.current_step
+        decision_idx = current_step + env_xgb.window_size - 1
+        current_price = env_xgb._prices[decision_idx]
 
         t2 = time.perf_counter()
-        next_obs, reward, terminated, truncated, info = env_dqn.step(action)
+        next_obs, reward, terminated, truncated, info = env_xgb.step(action)
         t3 = time.perf_counter()
-        dqn_reconstruction_times.append((t3 - t2) * 1000) # ms
+        xgb_reconstruction_times.append((t3 - t2) * 1000) # ms
 
-        next_decision_idx = env_dqn.current_step + env_dqn.window_size - 1
-        if next_decision_idx < len(env_dqn._prices):
-            next_price = env_dqn._prices[next_decision_idx]
+        next_decision_idx = env_xgb.current_step + env_xgb.window_size - 1
+        if next_decision_idx < len(env_xgb._prices):
+            next_price = env_xgb._prices[next_decision_idx]
         else:
-            next_price = env_dqn._prices[-1]
+            next_price = env_xgb._prices[-1]
 
         # Ground truth: 1 if price went up, else 0
         actual_class = 1 if next_price > current_price else 0
 
-        dqn_y_pred.append(predicted_class)
-        dqn_y_true.append(actual_class)
+        xgb_y_pred.append(predicted_class)
+        xgb_y_true.append(actual_class)
 
         obs = next_obs
 
-    # Calculate Isolated DQN Metrics
-    dqn_cm = confusion_matrix(dqn_y_true, dqn_y_pred, labels=[0, 1])
-    dqn_tn, dqn_fp, dqn_fn, dqn_tp = dqn_cm.ravel()
+    # Calculate Isolated XGB Metrics
+    xgb_cm = confusion_matrix(xgb_y_true, xgb_y_pred, labels=[0, 1])
+    xgb_tn, xgb_fp, xgb_fn, xgb_tp = xgb_cm.ravel()
 
-    dqn_recall = recall_score(dqn_y_true, dqn_y_pred, zero_division=0)
-    dqn_accuracy = accuracy_score(dqn_y_true, dqn_y_pred)
-    dqn_precision = precision_score(dqn_y_true, dqn_y_pred, zero_division=0)
+    xgb_recall = recall_score(xgb_y_true, xgb_y_pred, zero_division=0)
+    xgb_accuracy = accuracy_score(xgb_y_true, xgb_y_pred)
+    xgb_precision = precision_score(xgb_y_true, xgb_y_pred, zero_division=0)
 
     # -------------------------------------------------------------------------
-    # RUN COMBINED SYSTEM (DQN + PPO Meta-Labeling)
+    # RUN COMBINED SYSTEM (XGBoost + PPO Meta-Labeling)
     # -------------------------------------------------------------------------
-    env_meta = TradingEnv(df=df, is_discrete=False)
+    env_meta = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path)
     obs, _ = env_meta.reset(options={'start_step': 0})
 
     meta_y_true = []
@@ -127,32 +124,34 @@ def run_telemetry(ticker):
     truncated = False
 
     while not (terminated or truncated):
-        obs_for_pred = obs
-        if meta_agent.observation_space.shape[-1] < obs.shape[-1]:
-            obs_for_pred = obs[..., :meta_agent.observation_space.shape[-1]]
-
         t0 = time.perf_counter()
-        # Custom prediction logic to extract probability for Log-Loss
-        dqn_act, _ = meta_agent.dqn.predict(obs_for_pred, deterministic=True)
-        direction = dqn_mapping[int(dqn_act)]
 
-        if direction == 0:
+        xgb_signal = obs[0]
+        xgb_prob_val = obs[1]
+
+        if xgb_signal == 0:
             final_action = np.array([0.0])
             prob_long = 0.0 # No conviction to go long
         else:
-            ppo_act, _ = meta_agent.ppo.predict(obs_for_pred, deterministic=True)
-            raw_p = (ppo_act[0] + 1.0) / 2.0
-            raw_p = np.clip(raw_p, 0.01, 0.99)
-
-            z = (raw_p - 0.5) / np.sqrt(raw_p * (1.0 - raw_p))
-            from scipy.stats import norm
-            m = 2.0 * norm.cdf(z) - 1.0
-            m_discrete = np.round(m / meta_agent.step_size) * meta_agent.step_size
-            final_action = np.array([np.sign(direction) * m_discrete])
+            ppo_act, _ = meta_agent.ppo.predict(obs, deterministic=True)
+            raw_size = np.clip(ppo_act[0], 0.0, 1.0)
+            m_discrete = np.round(raw_size / meta_agent.step_size) * meta_agent.step_size
+            # In Phase 2, PPO output is just bet size and action space is continuous [0.0, 1.0].
+            # TradingEnv will treat action > 0 as Long and action <= 0 as Sell based on `act > 0`.
+            # To pass a valid action to the env, we just pass the positive size if it's a long signal,
+            # or 0.0 if it's a short signal (which effectively sells existing position).
+            # The MetaAgent predict logic does np.sign(direction) * m_discrete, returning negative actions for shorts.
+            # We must map this for the Gym Box space. But wait, TradingEnv action_space is Box(0.0, 1.0).
+            # Therefore we shouldn't pass negative actions!
+            # If xgb_signal < 0, we just want to sell. A 0.0 action is sell.
+            if xgb_signal < 0:
+                final_action = np.array([0.0])
+            else:
+                final_action = np.array([m_discrete])
 
             # Probability that the current signal is a winning long
-            if direction > 0:
-                prob_long = raw_p
+            if xgb_signal > 0:
+                prob_long = xgb_prob_val
             else:
                 prob_long = 0.0 # Short signals are ignored in long-only
 
@@ -196,7 +195,7 @@ def run_telemetry(ticker):
     except ValueError:
         meta_log_loss = np.nan
 
-    delta_precision = meta_precision - dqn_precision
+    delta_precision = meta_precision - xgb_precision
 
     avg_inference = np.mean(meta_inference_times)
     avg_reconstruction = np.mean(meta_reconstruction_times)
@@ -204,13 +203,13 @@ def run_telemetry(ticker):
     print("==================================================")
     print("1. DECOUPLED AGENT TELEMETRY REPORT")
     print("==================================================")
-    print("Baseline DQN (Isolated)")
-    print(f"Confusion Matrix: TP={dqn_tp}, TN={dqn_tn}, FP={dqn_fp}, FN={dqn_fn}")
-    print(f"Recall:   {dqn_recall:.4f}")
-    print(f"Accuracy: {dqn_accuracy:.4f}")
-    print(f"Precision: {dqn_precision:.4f}")
+    print("Baseline XGBoost (Isolated)")
+    print(f"Confusion Matrix: TP={xgb_tp}, TN={xgb_tn}, FP={xgb_fp}, FN={xgb_fn}")
+    print(f"Recall:   {xgb_recall:.4f}")
+    print(f"Accuracy: {xgb_accuracy:.4f}")
+    print(f"Precision: {xgb_precision:.4f}")
     print("-" * 50)
-    print("Combined System (DQN + PPO)")
+    print("Combined System (XGBoost + PPO)")
     print(f"Confusion Matrix: TP={meta_tp}, TN={meta_tn}, FP={meta_fp}, FN={meta_fn}")
     print(f"Precision: {meta_precision:.4f}")
     print(f"F1-Score:  {meta_f1:.4f}")

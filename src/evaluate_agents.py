@@ -60,8 +60,12 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         dict: Performance metrics averaged across all evaluated steps.
     """
 
+    # If the model is not the MetaAgent and not XGB, we still need to provide the XGB model
+    # to the environment so it can construct the observation if PPO expects it.
+    xgb_path = "models/xgb_trading_bot.json"
+
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete)
+    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path=xgb_path)
 
     # Ensure episode length aligns with our non-overlapping windows
     env.episode_length = len(df) // 5
@@ -88,13 +92,22 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         truncated = False
 
         while not (terminated or truncated):
-            # Handle potential observation shape mismatch (e.g., model trained on fewer features)
-            # The current environment might have more features (7) than legacy models (4)
-            obs_for_prediction = obs
-            if model.observation_space.shape[-1] < obs.shape[-1]:
-                obs_for_prediction = obs[..., :model.observation_space.shape[-1]]
+            # Check if model is XGBoost directly
+            if hasattr(model, 'predict_proba'):
+                # xgb_signal is obs[0], we don't need predict here if we just output signal,
+                # but if we evaluate XGBoost directly (which live_inference simulates), we output action.
+                # The model variable might be XGBoost, which expects features.
+                # Actually, our env returns [signal, prob, vol, dd]
+                # If we evaluate standalone XGBoost, the action is just the signal
+                xgb_signal = obs[0]
+                action = np.array([np.sign(xgb_signal)])
+            else:
+                # Handle MetaAgent or PPO
+                obs_for_prediction = obs
+                if hasattr(model, 'observation_space') and hasattr(model.observation_space, 'shape') and model.observation_space.shape[-1] < obs.shape[-1]:
+                    obs_for_prediction = obs[..., :model.observation_space.shape[-1]]
 
-            action, _states = model.predict(obs_for_prediction, deterministic=True)
+                action, _states = model.predict(obs_for_prediction, deterministic=True)
 
             # Take step
             next_obs, reward, terminated, truncated, info = env.step(action)
@@ -386,12 +399,12 @@ def main(active_tickers=None):
             print(f"Failed to load {model_name}: {e}")
             continue
 
-    # Load and Instantiate MetaAgent if both DQN and PPO are present
-    dqn_model = next((m for name, m in models_to_eval.items() if "dqn" in name.lower()), None)
+    # Load and Instantiate MetaAgent if both XGBoost and PPO are present
+    xgb_model = next((m for name, m in models_to_eval.items() if "xgb" in name.lower()), None)
     ppo_model = next((m for name, m in models_to_eval.items() if "ppo" in name.lower()), None)
 
-    if dqn_model and ppo_model:
-        meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
+    if xgb_model and ppo_model:
+        meta_agent = MetaAgent(xgb_model=xgb_model, ppo_model=ppo_model, step_size=0.10)
         models_to_eval["meta_agent"] = meta_agent
 
     for model_name, model in models_to_eval.items():
@@ -400,11 +413,8 @@ def main(active_tickers=None):
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
 
-            # MetaAgent and PPO use continuous env, DQN uses discrete
-            if model_name == "meta_agent":
-                is_discrete = False
-            else:
-                is_discrete = "dqn" in model_name.lower()
+            # All models now use continuous env in phase 2 setup
+            is_discrete = False
 
             # Run Evaluation
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)

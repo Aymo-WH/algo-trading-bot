@@ -25,7 +25,7 @@ def load_config() -> dict:
         with open('config/config_phase1.json', 'r') as f:
             _CONFIG_CACHE = json.load(f)
             return _CONFIG_CACHE
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         _CONFIG_CACHE = {}
         return _CONFIG_CACHE
 
@@ -55,22 +55,25 @@ def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def load_agent(model_path: str):
     """
-    Loads a trained reinforcement learning agent from disk.
+    Loads a trained model from disk. Supports Stable-Baselines3 (PPO) and XGBoost.
 
     Args:
-        model_path (str): The path to the saved model file (.zip).
+        model_path (str): The path to the saved model file (.zip or .json).
 
     Returns:
-        stable_baselines3.BaseAlgorithm: The loaded model instance.
+        The loaded model instance.
 
     Raises:
         ValueError: If the model type is unknown.
     """
-    from stable_baselines3 import PPO, DQN
-
     if "ppo" in model_path.lower():
+        from stable_baselines3 import PPO
         return PPO.load(model_path)
-    elif "dqn" in model_path.lower():
-        return DQN.load(model_path)
+    elif "xgb" in model_path.lower():
+        import xgboost as xgb
+        # Assuming we save the XGBClassifier model using native save_model to .json
+        model = xgb.XGBClassifier()
+        model.load_model(model_path)
+        return model
     else:
         raise ValueError(f"Unknown model type for {model_path}")
