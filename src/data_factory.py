@@ -1,8 +1,6 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import random
@@ -12,29 +10,59 @@ import joblib
 from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
 from core.optimize_barriers import get_rolling_barriers
+from numba import njit, prange
 
 TRAIN_SPLIT_RATIO = 0.8
 
-MOCK_HEADLINES = [
-    "Company reports record earnings.",
-    "Market crashes due to geopolitical tensions.",
-    "New product launch is a huge success.",
-    "CEO resigns amid scandal.",
-    "Analyst upgrades stock rating.",
-    "Analyst downgrades stock rating.",
-    "Sector faces regulatory scrutiny.",
-    "Competitor announces major breakthrough.",
-    "Global economy shows signs of recovery.",
-    "Interest rates expected to rise.",
-    "Company announces stock buyback program.",
-    "Supply chain issues persist.",
-    "Quarterly revenue exceeds expectations.",
-    "Lawsuit filed against the company.",
-    "Strategic partnership announced.",
-    "Market remains flat.",
-    "Investors are cautious ahead of earnings."
-]
-_MOCK_HEADLINE_SCORES = None
+@njit
+def _sadf_inner(y_sub):
+    n = len(y_sub)
+    dy = y_sub[1:]
+    yx = y_sub[:-1]
+
+    sum_y = np.sum(yx)
+    sum_y2 = np.sum(yx**2)
+
+    mean_x2 = sum_y / (n - 1)
+    mean_y = np.sum(dy) / (n - 1)
+
+    var_x2 = sum_y2 - (sum_y**2)/(n-1)
+    if var_x2 < 1e-10:
+        return 0.0
+
+    cov_x2_y = np.sum(yx * dy) - sum_y * np.sum(dy) / (n-1)
+
+    beta = cov_x2_y / var_x2
+    alpha = mean_y - beta * mean_x2
+
+    res = dy - (alpha + beta * yx)
+    ssr = np.sum(res**2)
+
+    if ssr < 1e-10:
+        return 0.0
+
+    sigma2 = ssr / (n - 3)
+    se_beta = np.sqrt(sigma2 / var_x2)
+
+    if se_beta < 1e-10:
+        return 0.0
+
+    return beta / se_beta
+
+@njit(parallel=True)
+def rolling_sadf_np(prices, min_len, window):
+    n = len(prices)
+    sadf = np.full(n, np.nan)
+
+    for t in prange(window, n):
+        max_tstat = -np.inf
+        for s in range(t - window, t - min_len + 1):
+            y_sub = prices[s:t+1]
+            tstat = _sadf_inner(y_sub)
+            if tstat > max_tstat:
+                max_tstat = tstat
+        sadf[t] = max_tstat
+    return sadf
 
 
 def get_weights_ffd(d, thres=1e-4):
@@ -101,36 +129,6 @@ def frac_diff_ffd(series, d, thres=1e-4):
         df[name] = pd.Series(results, index=f_index)
     return pd.concat(df, axis=1)
 
-def download_nltk_data():
-    try:
-        nltk.data.find('sentiment/vader_lexicon.zip')
-    except LookupError:
-        nltk.download('vader_lexicon')
-
-def _get_cached_scores(sia):
-    global _MOCK_HEADLINE_SCORES
-    if _MOCK_HEADLINE_SCORES is None:
-        _MOCK_HEADLINE_SCORES = np.array([sia.polarity_scores(h)['compound'] for h in MOCK_HEADLINES])
-    return _MOCK_HEADLINE_SCORES
-
-def get_mock_sentiment_batch(n, sia):
-    """
-    Generates a batch of mock sentiment scores for the simulated dataset.
-
-    Args:
-        n (int): Number of sentiment scores to generate.
-        sia (SentimentIntensityAnalyzer): Pre-initialized VADER sentiment analyzer.
-
-    Returns:
-        np.ndarray: An array of simulated sentiment scores clipped between -1.0 and 1.0.
-    """
-    scores = _get_cached_scores(sia)
-
-    # Vectorized sampling
-    selected_scores = np.random.choice(scores, size=n)
-    noise = np.random.uniform(-0.1, 0.1, size=n)
-    final_scores = selected_scores + noise
-    return np.clip(final_scores, -1.0, 1.0)
 
 def construct_dollar_bars(df, target_bars_per_day=10):
     """
@@ -218,9 +216,6 @@ def fetch_data(config_path='config/config_phase1.json'):
     6. Applies Fractional Differentiation to the 'Close' price for stationarity.
     7. Splits the data into Train/Test sets with an embargo to prevent leakage.
     """
-    download_nltk_data()
-    sia = SentimentIntensityAnalyzer()
-
     # Security Fix: Prevent Path Traversal
     # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -320,57 +315,45 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"Not enough data to construct Dollar Bars for {ticker}.")
             continue
 
-        # Calculate RSI (14-day)
-        print(f"Calculating RSI for {ticker}...")
-        delta = df['Close'].diff()
+        # Calculate VPIN (Volume-Synchronized Probability of Informed Trading)
+        print(f"Calculating VPIN for {ticker}...")
+        dp = df['Close'].diff()
+        # Tick rule for volume classification
+        buy_vol = np.where(dp > 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
+        sell_vol = np.where(dp < 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
+        v_imb = np.abs(buy_vol - sell_vol)
 
-        # Gain/Loss
-        gain = (delta.where(delta > 0, 0))
-        loss = (-delta.where(delta < 0, 0))
+        window = 50
+        rolling_v_imb = pd.Series(v_imb, index=df.index).rolling(window=window).sum()
+        rolling_v = df['Volume'].rolling(window=window).sum()
+        df['VPIN'] = rolling_v_imb / rolling_v
 
-        # Average Gain/Loss using Wilder's Smoothing (alpha=1/14)
-        # com = 13 corresponds to alpha = 1/14
-        avg_gain = gain.ewm(com=13, adjust=False).mean()
-        avg_loss = loss.ewm(com=13, adjust=False).mean()
+        # Calculate Liquidity Proxies
+        print(f"Calculating Liquidity Proxies for {ticker}...")
+        dollar_volume = df['Close'] * df['Volume']
+        abs_return = df['Close'].pct_change().abs()
 
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
+        # Amihud's Illiquidity (Rolling average of |R_t| / Dollar Volume_t)
+        # Add small epsilon to denominator to prevent division by zero
+        illiquidity = abs_return / (dollar_volume + 1e-8)
+        df['Amihud_Illiq'] = illiquidity.rolling(window=window).mean()
 
-        # Calculate MACD (12, 26, 9)
-        print(f"Calculating MACD for {ticker}...")
-        # EMA 12
-        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-        # EMA 26
-        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+        # Kyle's Lambda (Rolling regression slope or simple proxy: Return / Dollar Volume)
+        ret = df['Close'].pct_change()
+        # Proxy: sign(Return) * |Return| / Dollar Volume = Return / Dollar Volume
+        lambda_proxy = ret / (dollar_volume + 1e-8)
+        df['Kyles_Lambda'] = lambda_proxy.rolling(window=window).mean()
 
-        df['MACD'] = exp1 - exp2
-        df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
-        # Calculate Bollinger Bands (20-day)
-        print(f"Calculating Bollinger Bands for {ticker}...")
-        rolling_20 = df['Close'].rolling(window=20)
-        sma_20 = rolling_20.mean()
-        std_20 = rolling_20.std()
-        df['BB_Upper'] = sma_20 + 2 * std_20
-        df['BB_Lower'] = sma_20 - 2 * std_20
-
-        # Calculate ATR (14-day)
-        print(f"Calculating ATR for {ticker}...")
-        high_low = df['High'] - df['Low']
-        high_close = (df['High'] - df['Close'].shift()).abs()
-        low_close = (df['Low'] - df['Close'].shift()).abs()
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        df['ATR'] = tr.rolling(window=14).mean()
+        # Calculate SADF (Supremum Augmented Dickey-Fuller)
+        print(f"Calculating SADF for {ticker}...")
+        prices_vals = df['Close'].values
+        sadf_vals = rolling_sadf_np(prices_vals, min_len=30, window=100)
+        df['SADF'] = sadf_vals
 
         print(f"Calculating Dynamic Barriers for {ticker}...")
         barriers_df = get_rolling_barriers(df['Close'], window=60, step=20)
         df['Optimal_PT'] = barriers_df['Optimal_PT'].fillna(2.0)
         df['Optimal_SL'] = barriers_df['Optimal_SL'].fillna(2.0)
-
-        # Add Simulated Sentiment
-        print(f"Calculating Simulated Sentiment for {ticker}...")
-        # Generating sentiment for all rows including those that might have NaNs (which are dropped later)
-        df['Sentiment_Score'] = get_mock_sentiment_batch(len(df), sia)
 
         # Apply Fractional Differentiation to Close price
         print(f"Applying Fractional Differentiation to {ticker}...")
@@ -396,7 +379,7 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"Warning: Could not find stationary series for {ticker} with d < 1.0. Using d=1.0")
             df['Close_FFD'] = frac_diff_ffd(df[['Close']], 1.0)['Close']
 
-        tech_cols = ['RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'ATR']
+        tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
         
         # 1. Drop NaNs FIRST so the split calculations are accurate
         df = df.dropna()
@@ -414,7 +397,7 @@ def fetch_data(config_path='config/config_phase1.json'):
         scaler.fit(df.loc[train_clean_idx, tech_cols])
         scaled_tech = scaler.transform(df.loc[all_clean_idx, tech_cols])
         
-        pca = PCA(n_components=5)
+        pca = PCA(n_components=4) # Changed from 5 to 4 because we now have 4 features
         scaled_train_tech = scaler.transform(df.loc[train_clean_idx, tech_cols])
         pca.fit(scaled_train_tech)
         pca_features = pca.transform(scaled_tech)
@@ -424,7 +407,7 @@ def fetch_data(config_path='config/config_phase1.json'):
         joblib.dump(scaler, f'models/matrices/scaler_{clean_ticker}.pkl')
         joblib.dump(pca, f'models/matrices/pca_{clean_ticker}.pkl')
 
-        pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
+        pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
         df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
         df = pd.concat([df, df_pca], axis=1)
         df.drop(columns=tech_cols, inplace=True)

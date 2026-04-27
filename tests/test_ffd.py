@@ -16,28 +16,18 @@ class TestFFD(unittest.TestCase):
             "pandas": MagicMock(),
             "joblib": MagicMock(),
             "yfinance": MagicMock(),
-            "nltk": MagicMock(),
-            "nltk.sentiment.vader": MagicMock(),
             "sklearn.decomposition": MagicMock(),
             "sklearn.preprocessing": MagicMock(),
             "statsmodels.tsa.stattools": MagicMock(),
             "scipy": MagicMock(),
             "scipy.stats": MagicMock(),
             "core.optimize_barriers": MagicMock(),
+            "numba": MagicMock(),
         }
 
-        # Setup numpy specific mock behavior
-        cls.last_arr_mock = None
-        def mock_array(data):
-            arr = MagicMock()
-            arr.tolist.return_value = data
-            arr.reshape.return_value = arr
-            arr.__getitem__.side_effect = lambda x: data[x]
-            cls.last_arr_mock = arr
-            return arr
-        cls.mocks["numpy"].array.side_effect = mock_array
-
         # Start patches
+        # We must keep numpy in sys.modules because np.testing uses it internally.
+        # So we mock everything EXCEPT numpy here to allow exact output matching.
         cls.patchers = [patch.dict("sys.modules", cls.mocks)]
         for p in cls.patchers:
             p.start()
@@ -53,24 +43,32 @@ class TestFFD(unittest.TestCase):
             p.stop()
 
     def test_get_weights_ffd_d1(self):
-        # d=1.0 should give [1, -1] which reversed is [-1, 1]
+        # Stop patch temporarily to allow native numpy import
+        for p in self.patchers: p.stop()
+        import numpy as np
         weights = get_weights_ffd(1.0)
-        self.mocks["numpy"].array.assert_any_call([-1.0, 1.0])
+        np.testing.assert_array_almost_equal(weights, np.array([[-1.0], [1.0]]))
+        for p in self.patchers: p.start()
 
     def test_get_weights_ffd_d0(self):
-        # d=0.0 should give [1] which reversed is [1]
+        for p in self.patchers: p.stop()
+        import numpy as np
         weights = get_weights_ffd(0.0)
-        self.mocks["numpy"].array.assert_any_call([1.0])
+        np.testing.assert_array_almost_equal(weights, np.array([[1.0]]))
+        for p in self.patchers: p.start()
 
     def test_get_weights_ffd_threshold(self):
-        # d=0.5, thres=0.1 -> w = [1.0, -0.5, -0.125]. Reversed: [-0.125, -0.5, 1.0]
-        get_weights_ffd(0.5, thres=0.1)
-        self.mocks["numpy"].array.assert_any_call([-0.125, -0.5, 1.0])
+        for p in self.patchers: p.stop()
+        import numpy as np
+        weights = get_weights_ffd(0.5, thres=0.1)
+        np.testing.assert_array_almost_equal(weights, np.array([[-0.125], [-0.5], [1.0]]))
+        for p in self.patchers: p.start()
 
     def test_output_shape_mock(self):
-        # Verify that reshape was called to make it a column vector
+        for p in self.patchers: p.stop()
         weights = get_weights_ffd(0.5)
-        self.last_arr_mock.reshape.assert_called_with(-1, 1)
+        self.assertEqual(weights.shape[1], 1)
+        for p in self.patchers: p.start()
 
 if __name__ == "__main__":
     unittest.main()

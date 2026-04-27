@@ -28,12 +28,10 @@ class TestTradingEnvSecurity(unittest.TestCase):
         self.valid_df = pd.DataFrame({
             'Close': np.random.rand(20),
             'Close_FFD': np.random.rand(20),
-            'Sentiment_Score': np.random.rand(20),
             'PCA_1': np.random.rand(20),
             'PCA_2': np.random.rand(20),
             'PCA_3': np.random.rand(20),
-            'PCA_4': np.random.rand(20),
-            'PCA_5': np.random.rand(20)
+            'PCA_4': np.random.rand(20)
         })
 
     def tearDown(self):
@@ -80,12 +78,10 @@ class TestTradingEnvSecurity(unittest.TestCase):
         df_float64 = pd.DataFrame({
             'Close': np.array([100.0] * 12, dtype=np.float64),
             'Close_FFD': np.array([0.0] * 12, dtype=np.float64),
-            'Sentiment_Score': np.array([0.5] * 12, dtype=np.float64),
             'PCA_1': np.array([50.0] * 12, dtype=np.float64),
             'PCA_2': np.array([0.0] * 12, dtype=np.float64),
             'PCA_3': np.array([110.0] * 12, dtype=np.float64),
-            'PCA_4': np.array([90.0] * 12, dtype=np.float64),
-            'PCA_5': np.array([1.0] * 12, dtype=np.float64)
+            'PCA_4': np.array([90.0] * 12, dtype=np.float64)
         })
         df_float64.to_csv(os.path.join(self.test_dir, 'float64_data.csv'), index=False)
 
@@ -93,7 +89,7 @@ class TestTradingEnvSecurity(unittest.TestCase):
 
         self.assertEqual(len(env.dfs), 1)
         loaded_df = env.dfs[0]
-        required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
+        required_columns = ['Close', 'Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
         for col in required_columns:
             self.assertEqual(loaded_df[col].dtype, np.float32)
 
