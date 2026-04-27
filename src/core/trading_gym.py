@@ -77,10 +77,10 @@ class TradingEnv(gym.Env):
                             print(f"Skipping {file}: Empty or not enough rows after dropna.")
                             continue
 
-                        required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
+                        required_columns = ['Close', 'Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
                         # Validate columns
                         if not set(required_columns).issubset(df_loaded.columns):
-                            print(f"Skipping {file}: Missing required columns.")
+                            print(f"Skipping {file}: Missing required columns. Found {df_loaded.columns}")
                             continue
 
                         # Validate data types
@@ -100,9 +100,10 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            obs = d[['Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']].values.astype(np.float32)
+            # Drop Sentiment_Score and PCA_5, now 5 core features
+            obs = d[['Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
             prices = d['Close'].values
-            atr = d['ATR'].values if 'ATR' in d.columns else prices * 0.02
+            atr = prices * 0.02 # Removed ATR dependency
             opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
             opt_sl = d['Optimal_SL'].values if 'Optimal_SL' in d.columns else np.full(len(d), 2.0)
             self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices, 'atr': atr, 'opt_pt': opt_pt, 'opt_sl': opt_sl})
@@ -123,9 +124,9 @@ class TradingEnv(gym.Env):
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
         
         # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 9 (7 market features + 2 portfolio features)
+        # num_features = 7 (5 market features + 2 portfolio features)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 9), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
         )
 
         self.obs_buffer = np.empty((self.window_size, self.observation_space.shape[1]), dtype=np.float32)
