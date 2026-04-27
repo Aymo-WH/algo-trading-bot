@@ -5,7 +5,6 @@ import numpy as np
 import glob
 import random
 import os
-from collections import deque
 from core.utils import load_config
 
 class TradingEnv(gym.Env):
