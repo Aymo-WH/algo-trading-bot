@@ -108,8 +108,8 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            # Drop Sentiment_Score and PCA_5, now 5 core features
-            obs = d[['Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
+            # Only pull the 4 features XGBoost needs
+            obs = d[['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
             prices = d['Close'].values
             atr = prices * 0.02 # Removed ATR dependency
             opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
@@ -337,20 +337,37 @@ class TradingEnv(gym.Env):
         return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
 
     def _get_single_observation(self, step_idx, cash, shares_held, target_array):
-        if step_idx < len(self.obs_matrix):
-            base_obs = self.obs_matrix[step_idx]
-            current_price = self._prices[step_idx]
+        # Clamp step_idx
+        step_idx = min(step_idx, len(self.obs_matrix) - 1)
+
+        # 1. Calculate Volatility
+        current_price = self._prices[step_idx]
+        current_atr = self._atr[step_idx]
+        volatility = (current_atr / current_price) if current_price > 0 else 0.0
+
+        # 2. Calculate Drawdown
+        net_worth = cash + (shares_held * current_price)
+        peak = max(self.peak_net_worth, net_worth)
+        drawdown = (peak - net_worth) / peak if peak > 0 else 0.0
+
+        # 3. Generate XGBoost Signal & Probability
+        if self.xgb_model is not None:
+            # Reshape the 4 PCA features for the XGBoost predict method
+            pca_features = self.obs_matrix[step_idx].reshape(1, -1)
+            probs = self.xgb_model.predict_proba(pca_features)[0]
+            # Classes are [0, 1, 2] mapping to [-1, 0, 1]
+            pred_class = np.argmax(probs)
+            xgb_signal = float(pred_class) - 1.0
+            xgb_prob = float(probs[pred_class])
         else:
-            base_obs = self.obs_matrix[-1]
-            current_price = self._prices[-1]
+            xgb_signal = 0.0
+            xgb_prob = 0.0
 
-        norm_cash = cash / self.initial_balance
-        norm_holdings = (shares_held * current_price) / self.initial_balance
-
-        n = base_obs.shape[0]
-        target_array[:n] = base_obs
-        target_array[n] = norm_cash
-        target_array[n + 1] = norm_holdings
+        # 4. Populate the target array
+        target_array[0] = xgb_signal
+        target_array[1] = xgb_prob
+        target_array[2] = volatility
+        target_array[3] = drawdown
 
     def render(self, mode='human'):
         """
