@@ -85,6 +85,29 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
 
         print(f"\nBest Hyperparameters for {ticker}:", study.best_params)
 
+        # Re-train the models using the best discovered hyperparameters to 'restore' the engine
+        print(f"\n[SYSTEM] Restoring execution engine for {ticker}...")
+
+        best_dqn = train_dqn(
+            ticker=ticker,
+            total_timesteps=timesteps,
+            dqn_lr=study.best_params.get("dqn_lr"),
+            dqn_target_update=study.best_params.get("dqn_target_update")
+        )
+        best_ppo = train_ppo(
+            ticker=ticker,
+            total_timesteps=timesteps,
+            ppo_lr=study.best_params.get("ppo_lr"),
+            ppo_clip=study.best_params.get("ppo_clip"),
+            ppo_ent=study.best_params.get("ppo_ent")
+        )
+
+        # Save to the specific paths expected by live_inference.py
+        os.makedirs("models", exist_ok=True)
+        best_dqn.save("models/dqn_trading_bot")
+        best_ppo.save("models/ppo_meta_labeler")
+        print(f"✅ Execution engine restored: Best models for {ticker} saved to models/.")
+
         # === CALCULATE PBO USING THE TRUE CSCV MATRIX ===
         performance_matrix = pd.DataFrame(TRIAL_RETURNS_MATRIX)
 
