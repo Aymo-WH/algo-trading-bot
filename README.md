@@ -21,6 +21,15 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 
 ---
 
+## 🏗️ Architecture V1.5 Upgrades
+
+*   **Hybrid Vectorization:** Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
+*   **Data Leakage Prevention:** Enforced a strict 60-Period Train/Test Embargo to eliminate predictive look-ahead bias and isolate the out-of-sample datasets.
+*   **Optimized Execution Barriers:** Utilized 3D Tensor broadcasting for calculating the Profit-Taking and Stop-Loss grids, maximizing localized grid search speeds.
+*   **Cloud Execution Safeguards:** Implemented memory optimization techniques (removing DataFrame copies) and absolute path resolution to ensure strict RunPod serverless stability.
+
+---
+
 ## 📂 Architecture & Core Modules
 
 The project follows a strict modular architecture, isolating core engine logic from laboratory tools.

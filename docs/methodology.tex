@@ -79,6 +79,14 @@ Hyperparameter tuning is governed by the Optuna engine utilizing a Tree-structur
 To quantify selection bias during optimization, we deployed Combinatorially Symmetric Cross-Validation (CSCV). We partition the out-of-sample matrix and evaluate all combinations to compute the logit $\lambda_c$. The Probability of Backtest Overfitting (PBO) is the cumulative distribution below zero:
 $$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
 
+\section{Architecture V1.5 Upgrades}
+\begin{itemize}
+    \item \textbf{Hybrid Vectorization:} Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
+    \item \textbf{Data Leakage Prevention:} Explicitly defined a 60-Period Train/Test Embargo to strictly separate in-sample from out-of-sample datasets, eliminating predictive look-ahead bias.
+    \item \textbf{Optimized Execution Barriers:} Utilized 3D Tensor broadcasting for calculating the Profit-Taking and Stop-Loss grids to enhance computational speed during localized grid searches.
+    \item \textbf{Cloud Execution Safeguards:} Implemented memory optimization techniques (removing DataFrame copies) and absolute path resolution to ensure strict RunPod serverless stability and mitigate directory traversal vulnerabilities.
+\end{itemize}
+
 \section{Conclusion}
 Building institutional quantitative architecture is not an exercise in avoiding failure, but in structurally harvesting it. By iteratively diagnosing and engineering solutions for data starvation, look-ahead bias, and inference state-loss, this pipeline synthesizes theoretical stochastic calculus with robust, production-grade Reinforcement Learning.
 
