@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    allowed_config_dir = os.path.normpath(os.path.join(project_root, "config"))
+    allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
 
     # 2. If it's a simple filename, assume it's in the 'config/' directory.
     # Otherwise, treat it as a relative or absolute path.
@@ -107,9 +107,9 @@ if __name__ == "__main__":
             config_path = input_path
 
     # 3. Final Security Validation: Resolve absolute path and verify it's within 'config/'
-    abs_config_path = os.path.normpath(os.path.abspath(config_path))
+    abs_config_path = os.path.realpath(config_path)
 
-    if not abs_config_path.startswith(allowed_config_dir + os.sep):
+    if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
         print(f"[ERROR] Security: Configuration path '{input_path}' is restricted.")
     else:
         run_live_inference(abs_config_path)
