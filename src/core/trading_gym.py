@@ -209,6 +209,13 @@ class TradingEnv(gym.Env):
         tuple: (observation, reward, terminated, truncated, info dict).
         """
         decision_idx = self.current_step + self.window_size - 1
+
+        # STRICT BOUNDS CHECK
+        forced_termination = False
+        if decision_idx >= len(self._prices):
+            decision_idx = len(self._prices) - 1  # Clamp to final row
+            forced_termination = True             # Force episode to end
+
         current_price = self._prices[decision_idx]
 
         # Fetch Current ATR (fallback to a small percentage if ATR column is missing)
@@ -283,6 +290,10 @@ class TradingEnv(gym.Env):
         self.current_step += 1
     
         new_decision_idx = self.current_step + self.window_size - 1
+        if new_decision_idx >= len(self._prices):
+            new_decision_idx = len(self._prices) - 1
+            forced_termination = True
+
         new_price = self._prices[new_decision_idx]
             
         # ETF TRICK: Calculate reward based on pure asset growth, THEN explicitly deduct fee
@@ -302,7 +313,8 @@ class TradingEnv(gym.Env):
         reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
     
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
-                     ((self.current_step + self.window_size) >= len(self.df))
+                     ((self.current_step + self.window_size) >= len(self.df)) or \
+                     forced_termination
         truncated = False
             
         if pure_new_val < 1000:
