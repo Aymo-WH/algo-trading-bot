@@ -31,8 +31,8 @@ def parse_args():
         "--model",
         type=str,
         default="ppo",
-        choices=["ppo", "dqn"],
-        help="Model to train (ppo or dqn). Default: ppo"
+        choices=["ppo", "xgb"],
+        help="Model to train (ppo or xgb). Default: ppo"
     )
     parser.add_argument(
         "--timesteps",
@@ -80,6 +80,42 @@ def validate_path(path_str, arg_name):
 
     return path_str
 
+def compute_tbm_labels(df, max_holding_bars=15):
+    """
+    Computes labels using the Triple-Barrier Method.
+    Label 1 if Take Profit is hit first.
+    Label -1 if Stop Loss is hit first.
+    Label 0 if Time barrier is hit first or no barrier is hit.
+    We strictly avoid look-ahead bias by only looking at future prices relative to the current step `i`.
+    """
+    labels = np.zeros(len(df))
+    prices = df['Close'].values
+    atr = prices * 0.02 # Assuming fallback ATR calculation used in gym
+
+    opt_pt = df['Optimal_PT'].values if 'Optimal_PT' in df.columns else np.full(len(df), 2.0)
+    opt_sl = df['Optimal_SL'].values if 'Optimal_SL' in df.columns else np.full(len(df), 2.0)
+
+    for i in range(len(df)):
+        entry_price = prices[i]
+        entry_atr = atr[i]
+        upper_barrier = entry_price + (entry_atr * opt_pt[i])
+        lower_barrier = entry_price - (entry_atr * opt_sl[i])
+
+        hit = 0
+        for j in range(1, max_holding_bars + 1):
+            if i + j >= len(df):
+                break
+            curr_price = prices[i + j]
+            if curr_price >= upper_barrier:
+                hit = 1
+                break
+            elif curr_price <= lower_barrier:
+                hit = -1
+                break
+        labels[i] = hit
+
+    return labels
+
 def main():
     """
     Command-line execution flow for standalone model training.
@@ -94,6 +130,8 @@ def main():
     # Determine save path if not provided
     if args.save_path is None:
         save_path = f"models/{args.model}_trading_bot"
+        if args.model == "xgb":
+            save_path += ".json"
     else:
         save_path = args.save_path
 
@@ -101,19 +139,10 @@ def main():
     print(f"Data directory: {args.data_dir}")
     print(f"Model will be saved to: {save_path}")
 
-    # Initialize the environment and model
-    # DQN requires discrete actions, PPO can handle both but usually continuous
-    # Based on original scripts: PPO -> is_discrete=False, DQN -> is_discrete=True
-
     if args.model == "ppo":
-        # Use vectorized environment for PPO to improve training speed
-        # Determine number of CPUs to use
         n_cpu = max(1, multiprocessing.cpu_count() - 1)
         print(f"Igniting {n_cpu} parallel environments for PPO training...")
 
-        # We use DummyVecEnv by default (when vec_env_cls is not specified) as it is often faster
-        # for simple environments due to lower overhead than SubprocVecEnv.
-        # Benchmarks on this environment showed DummyVecEnv ~370 FPS vs SubprocVecEnv ~220 FPS vs Single Env ~215 FPS.
         env = make_vec_env(
             TradingEnv,
             n_envs=n_cpu,
@@ -123,71 +152,97 @@ def main():
         )
         env.action_space.seed(42)
         model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01, seed=42)
+        model.learn(total_timesteps=args.timesteps)
+        model.save(save_path)
+        print("Training complete and model saved.")
 
-    elif args.model == "dqn":
-        # DQN in SB3 doesn't support vector envs in the same way for efficiency gains usually
-        # and requires discrete actions
-        is_discrete = True
-        env = TradingEnv(is_discrete=is_discrete, data_dir=args.data_dir)
-        env.action_space.seed(42)
-        # Original DQN script used target_update_interval=500
-        model = DQN("MlpPolicy", env, verbose=1, target_update_interval=500, seed=42)
+    elif args.model == "xgb":
+        import xgboost as xgb
+        import glob
+        pattern = os.path.join(args.data_dir, '*_data.csv')
+        data_files = glob.glob(pattern)
+        if not data_files:
+            raise FileNotFoundError(f"No data files found in {args.data_dir} directory.")
 
-    # Command the model to learn
-    model.learn(total_timesteps=args.timesteps)
+        all_features = []
+        all_labels = []
 
-    # Save the trained model
-    model.save(save_path)
-    print("Training complete and model saved.")
+        feature_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
+
+        for file in data_files:
+            df = pd.read_csv(file).dropna().reset_index(drop=True)
+            if len(df) < 20:
+                continue
+
+            if not set(feature_cols).issubset(df.columns):
+                continue
+
+            labels = compute_tbm_labels(df)
+            features = df[feature_cols].values
+
+            # Map labels (-1, 0, 1) to (0, 1, 2)
+            mapped_labels = labels + 1
+
+            all_features.append(features)
+            all_labels.append(mapped_labels)
+
+        if not all_features:
+            raise ValueError("No valid data loaded for XGBoost.")
+
+        X = np.vstack(all_features)
+        y = np.concatenate(all_labels)
+
+        model = xgb.XGBClassifier(
+            objective='multi:softprob',
+            num_class=3,
+            eval_metric='mlogloss',
+            seed=42,
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=5
+        )
+
+        print("Fitting XGBoost model on TBM labels...")
+        model.fit(X, y)
+
+        os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else ".", exist_ok=True)
+        model.save_model(save_path)
+        print("XGBoost training complete and model saved.")
 
 if __name__ == "__main__":
     main()
 
-def train_dqn(ticker, total_timesteps=10000, **kwargs):
+def train_xgb(ticker, **kwargs):
     """
-    Trains a DQN (Deep Q-Network) agent on a specific ticker.
-
-    DQN is a value-based reinforcement learning algorithm ideal for discrete action spaces.
-    In the Meta-Labeling architecture, this acts as the primary model predicting trade direction.
-
-    Args:
-        ticker (str): The specific stock to train on.
-        total_timesteps (int): Number of steps to train. Defaults to 10000.
-        **kwargs: Extensible hyperparameter overrides (e.g. learning rate, target update freq).
-
-    Returns:
-        stable_baselines3.DQN: The trained primary agent.
+    Trains an XGBoost Classifier on a specific ticker using Triple-Barrier labels.
     """
     set_global_seed(42)
+    import xgboost as xgb
 
-    # Determine learning rate and target update interval from kwargs
-    learning_rate = kwargs.get('dqn_lr', 1e-4)
-    target_update_interval = kwargs.get('dqn_target_update', 1000)
-
-    # DQN requires discrete actions
-    is_discrete = True
-
-    # Check if a specific file exists, if so load that file, else pass data_dir
     data_dir = "data/train/"
-    # Ideally we should pass a specific dataframe, but for simplicity, we pass data_dir
-    # However, memory mentions: "train_agent.py acts as the unified training script... defaults to 50,000 timesteps...".
-    # And we know TradingEnv loads all *_data.csv in data_dir by default.
-    # To train on a specific ticker, we should pass its dataframe.
+    ticker_file = os.path.join(data_dir, f"{os.path.basename(ticker)}_data.csv")
 
-    ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
-    if os.path.exists(ticker_file):
-        df = pd.read_csv(ticker_file)
-        if 'Date' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'])
-        env = TradingEnv(df=df, is_discrete=is_discrete)
-    else:
-        # Fallback to loading all if specific ticker file not found (though unexpected)
-        env = TradingEnv(is_discrete=is_discrete, data_dir=data_dir)
+    if not os.path.exists(ticker_file):
+        raise FileNotFoundError(f"Data file for {ticker} not found.")
 
-    env.action_space.seed(42)
+    df = pd.read_csv(ticker_file).dropna().reset_index(drop=True)
+    feature_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
 
-    model = DQN("MlpPolicy", env, verbose=0, learning_rate=learning_rate, target_update_interval=target_update_interval, seed=42)
-    model.learn(total_timesteps=total_timesteps)
+    if not set(feature_cols).issubset(df.columns):
+        raise ValueError(f"Missing required features in {ticker_file}.")
+
+    labels = compute_tbm_labels(df)
+    X = df[feature_cols].values
+    y = labels + 1 # shift -1, 0, 1 to 0, 1, 2
+
+    model = xgb.XGBClassifier(
+        objective='multi:softprob',
+        num_class=3,
+        seed=42,
+        **kwargs
+    )
+
+    model.fit(X, y)
     return model
 
 def train_ppo(ticker, total_timesteps=300000, **kwargs):
