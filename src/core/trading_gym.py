@@ -142,6 +142,7 @@ class TradingEnv(gym.Env):
         self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
+        self.peak_net_worth = 10000.0
         self.current_step = 0
         self.episode_length = 90
 
@@ -193,6 +194,7 @@ class TradingEnv(gym.Env):
         # Explicit resets requested
         self.balance = 10000.0
         self.net_worth = 10000.0
+        self.peak_net_worth = 10000.0
         self.total_fees = 0.0
 
         # Populate initial buffer
@@ -310,17 +312,16 @@ class TradingEnv(gym.Env):
         pure_new_val = self.cash + (self.shares_held * new_price)
         daily_return = (pure_new_val - prev_val) / prev_val if prev_val > 0 else 0
             
-        if daily_return > 0:
-            reward = daily_return * 100
-        else:
-            reward = (daily_return * 100) * 1.5
-                
-        # Hold Cash Penalty
-        if self.shares_held == 0:
-            reward -= 0.01
-                
-        # Explicit Negative Dividend (Prevents fake compounding)
-        reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
+        self.peak_net_worth = max(self.peak_net_worth, pure_new_val)
+        drawdown = (self.peak_net_worth - pure_new_val) / self.peak_net_worth if self.peak_net_worth > 0 else 0.0
+
+        base_gross_profit = daily_return * 100
+        bet_size = abs(act)
+        turnover_penalty_coef = self.transaction_fee_percent * 100
+        variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
+        cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
+
+        reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
     
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
                      ((self.current_step + self.window_size) >= len(self.df)) or \
