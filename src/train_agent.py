@@ -9,6 +9,30 @@ import multiprocessing
 import torch
 import random
 import numpy as np
+from numba import njit
+
+@njit
+def _compute_tbm_labels_njit(prices, atr, opt_pt, opt_sl, max_holding_bars):
+    labels = np.zeros(len(prices))
+    for i in range(len(prices)):
+        entry_price = prices[i]
+        entry_atr = atr[i]
+        upper_barrier = entry_price + (entry_atr * opt_pt[i])
+        lower_barrier = entry_price - (entry_atr * opt_sl[i])
+
+        hit = 0
+        for j in range(1, max_holding_bars + 1):
+            if i + j >= len(prices):
+                break
+            curr_price = prices[i + j]
+            if curr_price >= upper_barrier:
+                hit = 1
+                break
+            elif curr_price <= lower_barrier:
+                hit = -1
+                break
+        labels[i] = hit
+    return labels
 
 def set_global_seed(seed=42):
     """
@@ -88,31 +112,14 @@ def compute_tbm_labels(df, max_holding_bars=15):
     Label 0 if Time barrier is hit first or no barrier is hit.
     We strictly avoid look-ahead bias by only looking at future prices relative to the current step `i`.
     """
-    labels = np.zeros(len(df))
     prices = df['Close'].values
     atr = prices * 0.02 # Assuming fallback ATR calculation used in gym
 
     opt_pt = df['Optimal_PT'].values if 'Optimal_PT' in df.columns else np.full(len(df), 2.0)
     opt_sl = df['Optimal_SL'].values if 'Optimal_SL' in df.columns else np.full(len(df), 2.0)
 
-    for i in range(len(df)):
-        entry_price = prices[i]
-        entry_atr = atr[i]
-        upper_barrier = entry_price + (entry_atr * opt_pt[i])
-        lower_barrier = entry_price - (entry_atr * opt_sl[i])
-
-        hit = 0
-        for j in range(1, max_holding_bars + 1):
-            if i + j >= len(df):
-                break
-            curr_price = prices[i + j]
-            if curr_price >= upper_barrier:
-                hit = 1
-                break
-            elif curr_price <= lower_barrier:
-                hit = -1
-                break
-        labels[i] = hit
+    # Use the optimized njit function
+    labels = _compute_tbm_labels_njit(prices, atr, opt_pt, opt_sl, max_holding_bars)
 
     return labels
 
