@@ -1,13 +1,12 @@
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from stable_baselines3 import PPO, DQN
 from core.trading_gym import TradingEnv
 from core.meta_agent import MetaAgent
 import glob
 import os
 import warnings
-from core.utils import flatten_multiindex_columns
+from core.utils import flatten_multiindex_columns, load_agent
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -19,23 +18,6 @@ INITIAL_CAPITAL = 10000.0
 
 # Global cache for S&P 500 benchmark data to prevent redundant downloads
 _GSPC_CACHE = None
-
-def load_agent(model_path):
-    """
-    Loads a trained reinforcement learning agent from disk.
-
-    Args:
-        model_path (str): The path to the saved model file (.zip).
-
-    Returns:
-        stable_baselines3.BaseAlgorithm: The loaded model instance, or None if the path is invalid.
-    """
-    if "ppo" in model_path.lower():
-        return PPO.load(model_path)
-    elif "dqn" in model_path.lower():
-        return DQN.load(model_path)
-    else:
-        raise ValueError(f"Unknown model type for {model_path}")
 
 def calculate_cagr(start_value, end_value, start_date, end_date):
     """

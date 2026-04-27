@@ -52,3 +52,25 @@ def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
         except (IndexError, ValueError):
             pass
     return df
+
+def load_agent(model_path: str):
+    """
+    Loads a trained reinforcement learning agent from disk.
+
+    Args:
+        model_path (str): The path to the saved model file (.zip).
+
+    Returns:
+        stable_baselines3.BaseAlgorithm: The loaded model instance.
+
+    Raises:
+        ValueError: If the model type is unknown.
+    """
+    from stable_baselines3 import PPO, DQN
+
+    if "ppo" in model_path.lower():
+        return PPO.load(model_path)
+    elif "dqn" in model_path.lower():
+        return DQN.load(model_path)
+    else:
+        raise ValueError(f"Unknown model type for {model_path}")
