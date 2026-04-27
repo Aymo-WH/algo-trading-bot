@@ -147,14 +147,12 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     Returns:
         pd.DataFrame: A DataFrame indexed by the completion time of each Dollar Bar.
     """
-    df = df.copy()
-
-    # Calculate 'Dollar Volume'
-    df['Dollar_Volume'] = df['Close'] * df['Volume']
+    # Calculate 'Dollar Volume' as numpy array to avoid unnecessary DF copy
+    dv_values = (df['Close'] * df['Volume']).values
 
     # Calculate dynamic threshold (M):
     # Rolling 30-day window (approx 210 hourly trading bars) of total Dollar Volume, divided by 300
-    M = df['Dollar_Volume'].rolling(window=210).sum() / 300
+    M = pd.Series(dv_values, index=df.index).rolling(window=210).sum() / 300
 
     # Forward-fill/backward-fill NaNs
     M = M.ffill().bfill()
@@ -178,7 +176,7 @@ def construct_dollar_bars(df, target_bars_per_day=10):
         current_bar_low = min(current_bar_low, row.Low)
         current_bar_vol += row.Volume
 
-        cum_dv += row.Dollar_Volume
+        cum_dv += dv_values[i]
 
         threshold = m_values[i]
 
