@@ -147,7 +147,7 @@ def main():
             TradingEnv,
             n_envs=n_cpu,
             seed=42,
-            env_kwargs={"is_discrete": False, "data_dir": args.data_dir},
+            env_kwargs={"is_discrete": False, "data_dir": args.data_dir, "xgb_model_path": "models/xgb_trading_bot.json"},
             vec_env_cls=SubprocVecEnv
         )
         env.action_space.seed(42)
@@ -278,7 +278,7 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
             TradingEnv,
             n_envs=max(1, multiprocessing.cpu_count() - 1),
             seed=42,
-            env_kwargs={"df": df, "is_discrete": False},
+            env_kwargs={"df": df, "is_discrete": False, "xgb_model_path": "models/xgb_trading_bot.json"},
             vec_env_cls=SubprocVecEnv
         )
     else:
@@ -286,7 +286,7 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
             TradingEnv,
             n_envs=max(1, multiprocessing.cpu_count() - 1),
             seed=42,
-            env_kwargs={"is_discrete": False, "data_dir": data_dir},
+            env_kwargs={"is_discrete": False, "data_dir": data_dir, "xgb_model_path": "models/xgb_trading_bot.json"},
             vec_env_cls=SubprocVecEnv
         )
 
