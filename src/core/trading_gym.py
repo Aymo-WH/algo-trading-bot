@@ -197,9 +197,8 @@ class TradingEnv(gym.Env):
         self.peak_net_worth = 10000.0
         self.total_fees = 0.0
 
-        # Populate initial buffer
-        for i in range(self.window_size):
-            self._get_single_observation(self.current_step + i, self.cash, self.shares_held, self.obs_buffer[i])
+        # Populate initial 1D buffer for the current step
+        self._get_single_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
 
         observation = self.obs_buffer
         info = {}
@@ -220,7 +219,7 @@ class TradingEnv(gym.Env):
         Returns:
         tuple: (observation, reward, terminated, truncated, info dict).
         """
-        decision_idx = self.current_step + self.window_size - 1
+        decision_idx = self.current_step
 
         # STRICT BOUNDS CHECK
         forced_termination = False
@@ -301,7 +300,7 @@ class TradingEnv(gym.Env):
     
         self.current_step += 1
     
-        new_decision_idx = self.current_step + self.window_size - 1
+        new_decision_idx = self.current_step
         if new_decision_idx >= len(self._prices):
             new_decision_idx = len(self._prices) - 1
             forced_termination = True
@@ -323,16 +322,17 @@ class TradingEnv(gym.Env):
 
         reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
     
+        # Terminate if we reach the end of the dataframe
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
-                     ((self.current_step + self.window_size) >= len(self.df)) or \
+                     (self.current_step >= len(self.df) - 1) or \
                      forced_termination
         truncated = False
             
         if pure_new_val < 1000:
             terminated = True
                 
-        self.obs_buffer[:-1] = self.obs_buffer[1:]
-        self._get_single_observation(self.current_step + self.window_size - 1, self.cash, self.shares_held, self.obs_buffer[-1])
+        # Update the 1D buffer for the new step
+        self._get_single_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
     
         return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
 
