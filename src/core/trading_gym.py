@@ -22,7 +22,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10, xgb_model_path=None):
         """
         Initializes the trading environment and pre-loads data into memory caches to O(1) step access.
 
@@ -32,6 +32,7 @@ class TradingEnv(gym.Env):
             data_dir (str): Directory containing preprocessed CSV files. Defaults to 'data/'.
             transaction_fee_percent (float, optional): Custom fee. Overrides config.json.
             window_size (int): Lookback sequence length for state observations. Defaults to 10.
+            xgb_model_path (str, optional): Path to the XGBoost model to generate signal/probability.
         """
         """
         Initialize the Trading Environment.
@@ -53,6 +54,13 @@ class TradingEnv(gym.Env):
             self.transaction_fee_percent = transaction_fee_percent
 
         self.window_size = window_size
+
+        # Load XGBoost model if provided
+        self.xgb_model = None
+        if xgb_model_path and os.path.exists(xgb_model_path):
+            import xgboost as xgb
+            self.xgb_model = xgb.XGBClassifier()
+            self.xgb_model.load_model(xgb_model_path)
 
         # Load data
         if df is not None:
@@ -121,16 +129,17 @@ class TradingEnv(gym.Env):
         if self.is_discrete:
             self.action_space = spaces.Discrete(5)
         else:
-            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+            # Action space outputs continuous bet size [0.0, 1.0]
+            self.action_space = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         
-        # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 7 (5 market features + 2 portfolio features)
+        # Observation space is now a 1D Box with 4 features:
+        # [xgb_signal, xgb_prob, rolling_volatility, portfolio_drawdown]
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 7), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
         )
 
-        self.obs_buffer = np.empty((self.window_size, self.observation_space.shape[1]), dtype=np.float32)
-        self._forced_sell_action = np.array([-1.0], dtype=np.float32)
+        self.obs_buffer = np.empty((4,), dtype=np.float32)
+        self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
         self.current_step = 0
