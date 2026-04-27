@@ -22,7 +22,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10, xgb_model_path=None):
         """
         Initializes the trading environment and pre-loads data into memory caches to O(1) step access.
 
@@ -32,6 +32,7 @@ class TradingEnv(gym.Env):
             data_dir (str): Directory containing preprocessed CSV files. Defaults to 'data/'.
             transaction_fee_percent (float, optional): Custom fee. Overrides config.json.
             window_size (int): Lookback sequence length for state observations. Defaults to 10.
+            xgb_model_path (str, optional): Path to the XGBoost model to generate signal/probability.
         """
         """
         Initialize the Trading Environment.
@@ -53,6 +54,13 @@ class TradingEnv(gym.Env):
             self.transaction_fee_percent = transaction_fee_percent
 
         self.window_size = window_size
+
+        # Load XGBoost model if provided
+        self.xgb_model = None
+        if xgb_model_path and os.path.exists(xgb_model_path):
+            import xgboost as xgb
+            self.xgb_model = xgb.XGBClassifier()
+            self.xgb_model.load_model(xgb_model_path)
 
         # Load data
         if df is not None:
@@ -77,10 +85,10 @@ class TradingEnv(gym.Env):
                             print(f"Skipping {file}: Empty or not enough rows after dropna.")
                             continue
 
-                        required_columns = ['Close', 'Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']
+                        required_columns = ['Close', 'Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
                         # Validate columns
                         if not set(required_columns).issubset(df_loaded.columns):
-                            print(f"Skipping {file}: Missing required columns.")
+                            print(f"Skipping {file}: Missing required columns. Found {df_loaded.columns}")
                             continue
 
                         # Validate data types
@@ -100,9 +108,10 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            obs = d[['Close_FFD', 'Sentiment_Score', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4', 'PCA_5']].values.astype(np.float32)
+            # Drop Sentiment_Score and PCA_5, now 5 core features
+            obs = d[['Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
             prices = d['Close'].values
-            atr = d['ATR'].values if 'ATR' in d.columns else prices * 0.02
+            atr = prices * 0.02 # Removed ATR dependency
             opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
             opt_sl = d['Optimal_SL'].values if 'Optimal_SL' in d.columns else np.full(len(d), 2.0)
             self.precomputed_data.append({'df': d, 'obs': obs, 'prices': prices, 'atr': atr, 'opt_pt': opt_pt, 'opt_sl': opt_sl})
@@ -120,18 +129,20 @@ class TradingEnv(gym.Env):
         if self.is_discrete:
             self.action_space = spaces.Discrete(5)
         else:
-            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+            # Action space outputs continuous bet size [0.0, 1.0]
+            self.action_space = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         
-        # Observation space is now a 2D Box (window_size, num_features)
-        # num_features = 9 (7 market features + 2 portfolio features)
+        # Observation space is now a 1D Box with 4 features:
+        # [xgb_signal, xgb_prob, rolling_volatility, portfolio_drawdown]
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.window_size, 9), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
         )
 
-        self.obs_buffer = np.empty((self.window_size, self.observation_space.shape[1]), dtype=np.float32)
-        self._forced_sell_action = np.array([-1.0], dtype=np.float32)
+        self.obs_buffer = np.empty((4,), dtype=np.float32)
+        self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
+        self.peak_net_worth = 10000.0
         self.current_step = 0
         self.episode_length = 90
 
@@ -183,6 +194,7 @@ class TradingEnv(gym.Env):
         # Explicit resets requested
         self.balance = 10000.0
         self.net_worth = 10000.0
+        self.peak_net_worth = 10000.0
         self.total_fees = 0.0
 
         # Populate initial buffer
@@ -300,17 +312,16 @@ class TradingEnv(gym.Env):
         pure_new_val = self.cash + (self.shares_held * new_price)
         daily_return = (pure_new_val - prev_val) / prev_val if prev_val > 0 else 0
             
-        if daily_return > 0:
-            reward = daily_return * 100
-        else:
-            reward = (daily_return * 100) * 1.5
-                
-        # Hold Cash Penalty
-        if self.shares_held == 0:
-            reward -= 0.01
-                
-        # Explicit Negative Dividend (Prevents fake compounding)
-        reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
+        self.peak_net_worth = max(self.peak_net_worth, pure_new_val)
+        drawdown = (self.peak_net_worth - pure_new_val) / self.peak_net_worth if self.peak_net_worth > 0 else 0.0
+
+        base_gross_profit = daily_return * 100
+        bet_size = abs(act)
+        turnover_penalty_coef = self.transaction_fee_percent * 100
+        variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
+        cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
+
+        reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
     
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
                      ((self.current_step + self.window_size) >= len(self.df)) or \
