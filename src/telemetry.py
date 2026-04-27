@@ -5,24 +5,16 @@ import json
 import warnings
 import numpy as np
 import pandas as pd
-from stable_baselines3 import PPO, DQN
 from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score, f1_score, log_loss
 from core.trading_gym import TradingEnv
 from core.meta_agent import MetaAgent
+from core.utils import load_agent
 
 warnings.filterwarnings("ignore")
 
 MODELS_DIR = "models/"
 DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
-
-def load_agent(model_path):
-    if "ppo" in model_path.lower():
-        return PPO.load(model_path)
-    elif "dqn" in model_path.lower():
-        return DQN.load(model_path)
-    else:
-        raise ValueError(f"Unknown model type for {model_path}")
 
 def run_telemetry(ticker):
     print(f"\nEvaluating Telemetry for {ticker}...")
