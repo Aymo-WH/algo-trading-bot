@@ -218,9 +218,30 @@ def fetch_data(config_path='config/config_phase1.json'):
     download_nltk_data()
     sia = SentimentIntensityAnalyzer()
 
+    # Security Fix: Prevent Path Traversal
+    # 1. Resolve project root and allowed config directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    allowed_config_dir = os.path.normpath(os.path.join(project_root, "config"))
+
+    # 2. Resolve path: if simple filename, assume in config/
+    if os.path.dirname(config_path) == "":
+        target_path = os.path.join(allowed_config_dir, config_path)
+    else:
+        if not os.path.isabs(config_path):
+            target_path = os.path.join(project_root, config_path)
+        else:
+            target_path = config_path
+
+    # 3. Final Security Validation
+    abs_config_path = os.path.abspath(target_path)
+    if not abs_config_path.startswith(allowed_config_dir + os.sep):
+        print(f"[ERROR] Security: Configuration path '{config_path}' is restricted.")
+        return
+
     # Load configuration
     import json
-    with open(config_path, 'r') as f:
+    with open(abs_config_path, 'r') as f:
         config = json.load(f)
 
     import shutil
