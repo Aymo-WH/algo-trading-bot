@@ -224,7 +224,7 @@ def fetch_data(config_path='config/config_phase1.json'):
     # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    allowed_config_dir = os.path.normpath(os.path.join(project_root, "config"))
+    allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
 
     # 2. Resolve path: if simple filename, assume in config/
     if os.path.dirname(config_path) == "":
@@ -236,8 +236,8 @@ def fetch_data(config_path='config/config_phase1.json'):
             target_path = config_path
 
     # 3. Final Security Validation
-    abs_config_path = os.path.abspath(target_path)
-    if not abs_config_path.startswith(allowed_config_dir + os.sep):
+    abs_config_path = os.path.realpath(target_path)
+    if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
         print(f"[ERROR] Security: Configuration path '{config_path}' is restricted.")
         return
 
