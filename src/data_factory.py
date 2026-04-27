@@ -159,50 +159,51 @@ def construct_dollar_bars(df, target_bars_per_day=10):
     # Forward-fill/backward-fill NaNs
     M = M.ffill().bfill()
 
-    bars = []
-    cum_dv = 0
-    current_bar_open = None
-    current_bar_high = -np.inf
-    current_bar_low = np.inf
-    current_bar_vol = 0
-
-    # Optimization: Convert Series M to numpy array for O(1) access instead of O(N) .loc lookup
+    # 1. Extract to native NumPy arrays for maximum speed
     m_values = M.values
 
-    # Optimization: Use .itertuples() instead of .iterrows() for significant speedup
-    for i, row in enumerate(df.itertuples()):
-        if current_bar_open is None:
-            current_bar_open = row.Open
+    # 2. Fast tracking loop (No pandas overhead)
+    n_ticks = len(dv_values)
+    breach_indices = []
+    cum_dv = 0.0
 
-        current_bar_high = max(current_bar_high, row.High)
-        current_bar_low = min(current_bar_low, row.Low)
-        current_bar_vol += row.Volume
-
+    for i in range(n_ticks):
         cum_dv += dv_values[i]
+        if cum_dv >= m_values[i]:
+            breach_indices.append(i)
+            cum_dv = 0.0 # Exactly preserves the "discard remainder" logic
 
-        threshold = m_values[i]
+    # 3. Create a grouping array for vectorized aggregation
+    if not breach_indices:
+        return pd.DataFrame(columns=['Open', 'High', 'Low', 'Close', 'Volume']).set_index(pd.Index([], name='Date')) if 'Date' not in df.columns else pd.DataFrame()
 
-        if cum_dv >= threshold:
-            bars.append({
-                'Date': row.Index,
-                'Open': current_bar_open,
-                'High': current_bar_high,
-                'Low': current_bar_low,
-                'Close': row.Close,
-                'Volume': current_bar_vol
-            })
+    # Drop the incomplete forming bar by slicing up to the final breach
+    last_breach = breach_indices[-1]
 
-            # Reset the cumulative sum to 0
-            cum_dv = 0
-            current_bar_open = None
-            current_bar_high = -np.inf
-            current_bar_low = np.inf
-            current_bar_vol = 0
+    groups = np.zeros(last_breach + 1, dtype=int)
+    # Every tick AFTER a breach starts a new group
+    split_indices = np.array(breach_indices[:-1]) + 1
+    groups[split_indices] = 1
+    group_ids = np.cumsum(groups)
 
-    dollar_df = pd.DataFrame(bars)
-    if not dollar_df.empty:
-        dollar_df.set_index('Date', inplace=True)
-    return dollar_df
+    # Assign groups back to a temporary dataframe
+    df_temp = df.iloc[:last_breach + 1].copy()
+    df_temp['Group'] = group_ids
+
+    # 4. Vectorized groupby to build the bars instantly
+    dollar_bars = df_temp.groupby('Group').agg(
+        Open=('Open', 'first'),
+        High=('High', 'max'),
+        Low=('Low', 'min'),
+        Close=('Close', 'last'),
+        Volume=('Volume', 'sum')
+    )
+
+    # 5. Extract the correct timestamps (the time of the breach tick)
+    dollar_bars.index = df.index[breach_indices]
+    dollar_bars.index.name = 'Date'
+
+    return dollar_bars
 
 def fetch_data(config_path='config/config_phase1.json'):
     """
