@@ -291,10 +291,12 @@ def main(active_tickers=None):
     stock_start_steps = {}
     stock_dfs = {}
     stock_sp500_benchmarks = {}
+    stock_bh_benchmarks = {}
 
     # Store all dates to fetch global S&P 500 data once
     all_start_dates = []
     all_end_dates = []
+    unique_date_pairs = set()
 
     for data_path in data_files:
         stock_name = os.path.basename(data_path).replace("_data.csv", "")
@@ -317,6 +319,7 @@ def main(active_tickers=None):
             e_date = df['Date'].iloc[e_idx]
             all_start_dates.append(s_date)
             all_end_dates.append(e_date)
+            unique_date_pairs.add((s_date, e_date))
 
     # Fetch global S&P 500 data if dates are available
     global_sp500_df = None
@@ -325,21 +328,22 @@ def main(active_tickers=None):
         global_max_date = max(all_end_dates)
 
         global _GSPC_CACHE
-        # Add a buffer day to ensure end date is covered (yfinance is exclusive on end)
-        global_max_date_buffer = global_max_date + pd.Timedelta(days=1)
+        # Add a 7-day buffer to ensure weekends and holidays are covered
+        global_min_date_buffered = global_min_date - pd.Timedelta(days=7)
+        global_max_date_buffered = global_max_date + pd.Timedelta(days=7)
 
         # Check if cache covers the required range
         is_covered = (
             _GSPC_CACHE is not None and
             not _GSPC_CACHE.empty and
-            _GSPC_CACHE.index[0] <= global_min_date and
-            _GSPC_CACHE.index[-1] >= global_max_date
+            _GSPC_CACHE.index[0] <= global_min_date_buffered and
+            _GSPC_CACHE.index[-1] >= global_max_date_buffered
         )
 
         if not is_covered:
             try:
-                print(f"Fetching S&P 500 benchmark data from {global_min_date.date()} to {global_max_date_buffer.date()}...")
-                new_data = yf.download("^GSPC", start=global_min_date, end=global_max_date_buffer, progress=False)
+                print(f"Fetching S&P 500 benchmark data from {global_min_date_buffered.date()} to {global_max_date_buffered.date()}...")
+                new_data = yf.download("^GSPC", start=global_min_date_buffered, end=global_max_date_buffered, progress=False)
                 new_data = flatten_multiindex_columns(new_data)
 
                 if _GSPC_CACHE is None:
@@ -351,6 +355,12 @@ def main(active_tickers=None):
                 print(f"Error pre-fetching S&P 500 data: {e}")
 
         global_sp500_df = _GSPC_CACHE
+
+    # Pre-calculate unique S&P 500 benchmark pairs to avoid redundant slicing
+    if global_sp500_df is not None:
+        for s_date, e_date in unique_date_pairs:
+            if (s_date, e_date) not in sp500_cache:
+                sp500_cache[(s_date, e_date)] = get_benchmark_sp500(s_date, e_date, sp500_df=global_sp500_df)
 
     # Calculate Benchmarks using optimized or cached approach
     for stock_name, steps in stock_start_steps.items():
@@ -365,16 +375,22 @@ def main(active_tickers=None):
             e_idx = min(s + step_size, len(df) - 1)
             e_date = df['Date'].iloc[e_idx]
 
-            # Check cache
-            date_key = (s_date, e_date)
-            if date_key not in sp500_cache:
-                 sp500_cache[date_key] = get_benchmark_sp500(s_date, e_date, sp500_df=global_sp500_df)
-
-            r, c = sp500_cache[date_key]
+            # Use pre-calculated cache
+            r, c = sp500_cache.get((s_date, e_date), (0.0, 0.0))
             sp_rois.append(r)
             sp_cagrs.append(c)
 
         stock_sp500_benchmarks[stock_name] = (np.mean(sp_rois), np.mean(sp_cagrs))
+
+        # Also pre-calculate Buy & Hold for the stock
+        bh_rois = []
+        for s in steps:
+            start_price = df['Close'].iloc[s]
+            e_idx = min(s + step_size, len(df) - 1)
+            end_price = df['Close'].iloc[e_idx]
+            bh_rois.append(((end_price - start_price) / start_price) * 100)
+
+        stock_bh_benchmarks[stock_name] = np.mean(bh_rois)
 
 
     # Load Standalone Models
@@ -412,19 +428,7 @@ def main(active_tickers=None):
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
 
             # Benchmarks (Buy & Hold) over the fixed non-overlapping windows
-            bh_rois = []
-            step_size = len(df) // 5
-            for s in start_steps:
-                 # BH logic: (End - Start) / Start
-                 start_price = df['Close'].iloc[s]
-
-                 # End index is the end of the window
-                 e_idx = min(s + step_size, len(df) - 1)
-                 end_price = df['Close'].iloc[e_idx]
-
-                 bh_rois.append(((end_price - start_price) / start_price) * 100)
-
-            bh_roi = np.mean(bh_rois)
+            bh_roi = stock_bh_benchmarks[stock_name]
 
             sp500_roi, sp500_cagr = stock_sp500_benchmarks[stock_name]
 
