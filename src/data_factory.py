@@ -13,6 +13,8 @@ from statsmodels.tsa.stattools import adfuller
 import scipy.stats as ss
 from core.optimize_barriers import get_rolling_barriers
 
+TRAIN_SPLIT_RATIO = 0.8
+
 MOCK_HEADLINES = [
     "Company reports record earnings.",
     "Market crashes due to geopolitical tensions.",
@@ -398,8 +400,8 @@ def fetch_data(config_path='config/config_phase1.json'):
         # 1. Drop NaNs FIRST so the split calculations are accurate
         df = df.dropna()
 
-        # 2. Dynamically calculate the 80% split date on healthy data
-        split_idx = int(len(df) * 0.8)
+        # 2. Dynamically calculate the split date on healthy data
+        split_idx = int(len(df) * TRAIN_SPLIT_RATIO)
         split_date = df.index[split_idx]
 
         # 3. Create the Train index for PCA
