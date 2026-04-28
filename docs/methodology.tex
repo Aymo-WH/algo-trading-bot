@@ -49,14 +49,16 @@ $$ \omega_k = - \omega_{k-1} \frac{d - k + 1}{k} $$
 To prevent Look-Ahead Bias, we applied Principal Component Analysis (PCA) strictly point-in-time. The `StandardScaler` and PCA matrices are fitted exclusively to the training split before transforming the out-of-sample data.
 
 \subsection{Empirical Failure 3: The Ghost Matrices}
-\textbf{The Failure:} During the transition from the laboratory environment to a live inference script, the models generated profitable predictions in-sample but failed structurally out-of-sample. Forensic analysis revealed that while the PCA and Scaler matrices were fitted during data generation, they were never exported to disk. The live inference engine was attempting to feed raw, unscaled market prices into a Deep Q-Network that had learned a highly orthogonalized PCA state space.\\
+\textbf{The Failure:} During the transition from the laboratory environment to a live inference script, the models generated profitable predictions in-sample but failed structurally out-of-sample. Forensic analysis revealed that while the PCA and Scaler matrices were fitted during data generation, they were never exported to disk. The live inference engine was attempting to feed raw, unscaled market prices into a XGBoost that had learned a highly orthogonalized PCA state space.\\
 \textbf{The Solution:} We engineered a strict state-management protocol using `joblib`. The exact mathematical state of the `StandardScaler` and `PCA` transformations are dynamically exported to a dedicated `models/matrices/` directory per asset. The decoupled inference engine strictly loads these matrices before routing live broker data to the neural networks.
 
 \section{The Meta-Labeling Framework}
 A fundamental flaw in predictive modeling is conflating trade direction with conviction. We separated these concerns via a dual-network architecture:
 \begin{itemize}
-    \item \textbf{Primary Model (DQN):} Generates directional signals (Long, Short, Hold).
-    \item \textbf{Secondary Model (PPO):} Analyzes orthogonalized state vectors to predict the probability $p$ of the DQN's success.
+    \item \textbf{Microstructural Features:} Integrated VPIN, SADF, and Amihud Illiquidity to replace retail technical indicators, enabling rigorous state modeling.
+    \item \textbf{Safe RL Reward Function:} Engineered a new reward function incorporating Turnover, Variance, and Drawdown penalties to force risk-adjusted bet sizing.
+    \item \textbf{Primary Model (XGBoost):} Utilizes the Triple-Barrier Method to generate directional signals.
+    \item \textbf{Secondary Model (PPO):} Analyzes orthogonalized state vectors to predict the probability $p$ of the XGBoost's success.
 \end{itemize}
 Bet sizes $m$ are scaled continuously using the Normal Cumulative Distribution Function based on the PPO's confidence:
 $$ z = \frac{p - 0.5}{\sqrt{p(1-p)}}, \quad m = 2Z[z] - 1 $$
@@ -79,8 +81,10 @@ Hyperparameter tuning is governed by the Optuna engine utilizing a Tree-structur
 To quantify selection bias during optimization, we deployed Combinatorially Symmetric Cross-Validation (CSCV). We partition the out-of-sample matrix and evaluate all combinations to compute the logit $\lambda_c$. The Probability of Backtest Overfitting (PBO) is the cumulative distribution below zero:
 $$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
 
-\section{Architecture V1.5 Upgrades}
+\section{Architecture V2 Upgrades}
 \begin{itemize}
+    \item \textbf{Microstructural Features:} Integrated VPIN, SADF, Amihud Illiquidity, and Kyle's Lambda to capture market microstructure dynamics and informed trading probability.
+    \item \textbf{Safe RL Reward Function:} Engineered a new reward function incorporating Turnover, Variance, and Drawdown penalties to strictly penalize excessive trading, volatility, and portfolio drawdown.
     \item \textbf{Hybrid Vectorization:} Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
     \item \textbf{Data Leakage Prevention:} Explicitly defined a 60-Period Train/Test Embargo to strictly separate in-sample from out-of-sample datasets, eliminating predictive look-ahead bias.
     \item \textbf{Optimized Execution Barriers:} Utilized 3D Tensor broadcasting for calculating the Profit-Taking and Stop-Loss grids to enhance computational speed during localized grid searches.
