@@ -67,7 +67,7 @@ def run_telemetry(ticker):
 
         # XGBoost signal is the first element of observation
         xgb_signal = obs[0]
-        action = np.array([np.sign(xgb_signal)])
+        action = np.array([1.0]) if xgb_signal > 0 else np.array([0.0])
 
         t1 = time.perf_counter()
         xgb_inference_times.append((t1 - t0) * 1000) # ms
@@ -77,7 +77,7 @@ def run_telemetry(ticker):
 
         # Get next price to determine actual label
         current_step = env_xgb.current_step
-        decision_idx = current_step + env_xgb.window_size - 1
+        decision_idx = current_step
         current_price = env_xgb._prices[decision_idx]
 
         t2 = time.perf_counter()
@@ -85,7 +85,7 @@ def run_telemetry(ticker):
         t3 = time.perf_counter()
         xgb_reconstruction_times.append((t3 - t2) * 1000) # ms
 
-        next_decision_idx = env_xgb.current_step + env_xgb.window_size - 1
+        next_decision_idx = env_xgb.current_step
         if next_decision_idx < len(env_xgb._prices):
             next_price = env_xgb._prices[next_decision_idx]
         else:
@@ -161,7 +161,7 @@ def run_telemetry(ticker):
         predicted_class = 1 if final_action[0] > 0 else 0
 
         current_step = env_meta.current_step
-        decision_idx = current_step + env_meta.window_size - 1
+        decision_idx = current_step
         current_price = env_meta._prices[decision_idx]
 
         t2 = time.perf_counter()
@@ -169,7 +169,7 @@ def run_telemetry(ticker):
         t3 = time.perf_counter()
         meta_reconstruction_times.append((t3 - t2) * 1000)
 
-        next_decision_idx = env_meta.current_step + env_meta.window_size - 1
+        next_decision_idx = env_meta.current_step
         if next_decision_idx < len(env_meta._prices):
             next_price = env_meta._prices[next_decision_idx]
         else:

@@ -285,7 +285,7 @@ def main(active_tickers=None):
     print("Starting Evaluation...")
 
     # Find Models
-    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip"))
+    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip")) + glob.glob(os.path.join(MODELS_DIR, "*.json"))
     if not model_files:
         print("No models found in models/")
         return
