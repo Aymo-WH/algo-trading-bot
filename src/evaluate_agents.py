@@ -426,8 +426,7 @@ def main(active_tickers=None):
     ppo_model = next((m for name, m in models_to_eval.items() if "ppo" in name.lower()), None)
 
     if xgb_model and ppo_model:
-        meta_agent = MetaAgent(xgb_model=xgb_model, ppo_model=ppo_model, step_size=0.10)
-        models_to_eval["meta_agent"] = meta_agent
+        models_to_eval["Meta-Architecture (PPO Engine)"] = ppo_model
 
     for model_name, model in models_to_eval.items():
         # print(f"Evaluating Model: {model_name}")
