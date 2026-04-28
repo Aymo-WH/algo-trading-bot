@@ -201,6 +201,37 @@ def construct_dollar_bars(df, target_bars_per_day=10):
 
     return dollar_bars
 
+
+def calculate_microstructural_features(df, window=50):
+    '''Calculates VPIN, Amihud Illiquidity, Kyle's Lambda, and SADF for a dataframe.'''
+    # Calculate VPIN
+    dp = df['Close'].diff()
+    buy_vol = np.where(dp > 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
+    sell_vol = np.where(dp < 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
+    v_imb = np.abs(buy_vol - sell_vol)
+
+    rolling_v_imb = pd.Series(v_imb, index=df.index).rolling(window=window).sum()
+    rolling_v = df['Volume'].rolling(window=window).sum()
+    df['VPIN'] = rolling_v_imb / rolling_v
+
+    # Calculate Liquidity Proxies
+    dollar_volume = df['Close'] * df['Volume']
+    abs_return = df['Close'].pct_change().abs()
+
+    illiquidity = abs_return / (dollar_volume + 1e-8)
+    df['Amihud_Illiq'] = illiquidity.rolling(window=window).mean()
+
+    ret = df['Close'].pct_change()
+    lambda_proxy = ret / (dollar_volume + 1e-8)
+    df['Kyles_Lambda'] = lambda_proxy.rolling(window=window).mean()
+
+    # Calculate SADF
+    prices_vals = df['Close'].values
+    sadf_vals = rolling_sadf_np(prices_vals, min_len=30, window=100)
+    df['SADF'] = sadf_vals
+
+    return df
+
 def fetch_data(config_path='config/config_phase1.json'):
     """
     Main data pipeline: fetches, processes, and saves financial data.
@@ -313,40 +344,9 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"Not enough data to construct Dollar Bars for {ticker}.")
             continue
 
-        # Calculate VPIN (Volume-Synchronized Probability of Informed Trading)
-        print(f"Calculating VPIN for {ticker}...")
-        dp = df['Close'].diff()
-        # Tick rule for volume classification
-        buy_vol = np.where(dp > 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
-        sell_vol = np.where(dp < 0, df['Volume'], np.where(dp == 0, df['Volume'] / 2, 0))
-        v_imb = np.abs(buy_vol - sell_vol)
-
-        window = 50
-        rolling_v_imb = pd.Series(v_imb, index=df.index).rolling(window=window).sum()
-        rolling_v = df['Volume'].rolling(window=window).sum()
-        df['VPIN'] = rolling_v_imb / rolling_v
-
-        # Calculate Liquidity Proxies
-        print(f"Calculating Liquidity Proxies for {ticker}...")
-        dollar_volume = df['Close'] * df['Volume']
-        abs_return = df['Close'].pct_change().abs()
-
-        # Amihud's Illiquidity (Rolling average of |R_t| / Dollar Volume_t)
-        # Add small epsilon to denominator to prevent division by zero
-        illiquidity = abs_return / (dollar_volume + 1e-8)
-        df['Amihud_Illiq'] = illiquidity.rolling(window=window).mean()
-
-        # Kyle's Lambda (Rolling regression slope or simple proxy: Return / Dollar Volume)
-        ret = df['Close'].pct_change()
-        # Proxy: sign(Return) * |Return| / Dollar Volume = Return / Dollar Volume
-        lambda_proxy = ret / (dollar_volume + 1e-8)
-        df['Kyles_Lambda'] = lambda_proxy.rolling(window=window).mean()
-
-        # Calculate SADF (Supremum Augmented Dickey-Fuller)
-        print(f"Calculating SADF for {ticker}...")
-        prices_vals = df['Close'].values
-        sadf_vals = rolling_sadf_np(prices_vals, min_len=30, window=100)
-        df['SADF'] = sadf_vals
+        # Refactored microstructural feature generation to separate function
+        print(f"Calculating Microstructural Features for {ticker}...")
+        df = calculate_microstructural_features(df)
 
         print(f"Calculating Dynamic Barriers for {ticker}...")
         barriers_df = get_rolling_barriers(df['Close'], window=60, step=20)

@@ -13,7 +13,7 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 *   **Information-Driven Dollar Bars:** Neutralizes market noise and heteroscedasticity by sampling bars only when a dynamic threshold of fiat currency is exchanged.
 *   **Fractional Differentiation (FFD) & Point-in-Time PCA:** Achieves stationarity on price series while preserving memory, and extracts orthogonal features dynamically without look-ahead bias.
 *   **Dual-Agent Meta-Labeling (Dual-Brain System):** Strictly separates "Direction" from "Conviction."
-    *   A primary **Deep Q-Network (DQN)** model generates directional signals (-1, -0.5, 0, 0.5, 1).
+    *   A primary **XGBoost** model utilizes the Triple-Barrier Method to generate directional signals.
     *   A secondary **Proximal Policy Optimization (PPO)** agent acts as the risk manager, continuously sizing the bet based on statistical confidence (converting PPO output to a z-score and applying a Normal CDF).
 *   **Optimal Trading Rule (OTR) & Dynamic Rolling O-U Barriers:** Execution barrier optimization (Profit-Taking and Stop-Loss limits) is handled offline by estimating Ornstein-Uhlenbeck (O-U) parameters to prevent execution-level overfitting.
 *   **Probability of Backtest Overfitting (PBO):** Calculated via Combinatorially Symmetric Cross-Validation (CSCV) to strictly validate out-of-sample performance and penalize overfitting.
@@ -21,7 +21,10 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 
 ---
 
-## 🏗️ Architecture V1.5 Upgrades
+## 🏗️ Architecture V2 Upgrades
+
+*   **Microstructural Features:** Added VPIN, SADF, and Amihud Illiquidity to better capture market microstructure dynamics and informed trading probability.
+*   **Safe RL Reward Function:** Implemented Turnover, Variance, and Drawdown penalties to strictly penalize excessive trading, volatility, and portfolio drawdown.
 
 *   **Hybrid Vectorization:** Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
 *   **Data Leakage Prevention:** Enforced a strict 60-Period Train/Test Embargo to eliminate predictive look-ahead bias and isolate the out-of-sample datasets.
@@ -36,7 +39,7 @@ The project follows a strict modular architecture, isolating core engine logic f
 
 *   **`data_factory.py`**: The data pipeline. Fetches a rolling 730-day window of intraday data, compresses it into Information-Driven Dollar Bars, applies point-in-time PCA and FFD, and exports fitted mathematical matrices (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
 *   **`core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
-*   **`core/meta_agent.py`**: Combines the primary DQN model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
+*   **`core/meta_agent.py`**: Combines the primary XGBoost model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
 *   **`core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
 *   **`core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
 
@@ -58,7 +61,7 @@ python data_factory.py --config config/config_phase1.json
 ```
 
 ### 3. Agent Training (`train_agent.py`)
-Provides core utilities (`train_dqn`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
+Provides core utilities (`train_xgb`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
 
 ### 4. Headless Optimization (`research/optimize_agents.py`)
 Run headless hyperparameter optimization using Optuna. The engine loops through the specified basket of active tickers, tracking out-of-sample returns to build a True PBO matrix.
