@@ -43,7 +43,7 @@ class MetaAgent:
             direction = obs[0]
 
         # If the primary model says hold (or the signal is 0), we veto the trade
-        if direction == 0.0:
+        if direction <= 0:
             return np.array([0.0]), None
 
         # The secondary model (PPO) determines the continuous bet size [0.0, 1.0]

@@ -11,10 +11,12 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 ## 🧠 Core Engineering Features
 
 *   **Information-Driven Dollar Bars:** Neutralizes market noise and heteroscedasticity by sampling bars only when a dynamic threshold of fiat currency is exchanged.
+*   **Microstructural Features:** Discards retail technical indicators in favor of microstructure signals: VPIN (Volume-Synchronized Probability of Informed Trading), Amihud's Illiquidity, Kyle's Lambda, and the SADF statistic.
 *   **Fractional Differentiation (FFD) & Point-in-Time PCA:** Achieves stationarity on price series while preserving memory, and extracts orthogonal features dynamically without look-ahead bias.
-*   **Dual-Agent Meta-Labeling (Dual-Brain System):** Strictly separates "Direction" from "Conviction."
-    *   A primary **Deep Q-Network (DQN)** model generates directional signals (-1, -0.5, 0, 0.5, 1).
-    *   A secondary **Proximal Policy Optimization (PPO)** agent acts as the risk manager, continuously sizing the bet based on statistical confidence (converting PPO output to a z-score and applying a Normal CDF).
+*   **Dual-Agent Meta-Labeling (Dual-Brain System V2):** Strictly separates "Direction" from "Conviction."
+    *   A primary **XGBoost Classifier** model trained via the Triple-Barrier Method predicts directional signals (-1, 0, 1) to maximize recall on market regimes.
+    *   A secondary **Proximal Policy Optimization (PPO)** agent acts as the meta-labeling risk manager. It strictly handles continuous sizing between `[0.0, 1.0]`, adjusting the primary model's position sizes based on statistical confidence without counter-trading the primary signal.
+*   **Safe RL Reward Function:** The environment implements a stringent penalty structure enforcing responsible position sizing. It subtracts a Turnover Penalty (transaction fees scaled by bet size), a Variance Penalty (volatility scaled by squared bet size), and a Conditional Value-at-Risk (CVaR) Penalty (activated only if total drawdown exceeds 5%) from the base gross profit.
 *   **Optimal Trading Rule (OTR) & Dynamic Rolling O-U Barriers:** Execution barrier optimization (Profit-Taking and Stop-Loss limits) is handled offline by estimating Ornstein-Uhlenbeck (O-U) parameters to prevent execution-level overfitting.
 *   **Probability of Backtest Overfitting (PBO):** Calculated via Combinatorially Symmetric Cross-Validation (CSCV) to strictly validate out-of-sample performance and penalize overfitting.
 *   **Multi-Asset Modular Configuration:** Dynamic configuration handling for multiple asset classes via isolated files (e.g., `config/config_crypto.json`, `config/config_macro.json`).

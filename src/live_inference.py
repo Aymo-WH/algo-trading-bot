@@ -4,8 +4,7 @@ import os
 import random
 try:
     import joblib
-    from stable_baselines3 import PPO
-    from core.utils import load_agent
+    from stable_baselines3 import DQN, PPO
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -31,21 +30,21 @@ def run_live_inference(config_path):
         return
 
     # Load Brains
-    xgb_path = "models/xgb_trading_bot.json"
+    dqn_path = "models/dqn_trading_bot.zip"
     ppo_path = "models/ppo_meta_labeler.zip"
 
     # Try to load models. Just a simulation check to make sure they'd load
     if HAS_DEPENDENCIES:
         try:
             # Load models if they exist, otherwise just simulate it so the script doesn't completely crash if models aren't generated yet.
-            if os.path.exists(xgb_path) and os.path.exists(ppo_path):
-                xgb_model = load_agent(xgb_path)
+            if os.path.exists(dqn_path) and os.path.exists(ppo_path):
+                dqn_model = DQN.load(dqn_path)
                 ppo_model = PPO.load(ppo_path)
                 print("[SYSTEM] Brains Loaded.")
             else:
-                print("[WARNING] Models not found in 'models/'. Simulated load.")
+                print("[WARNING] Stable-Baselines3 models not found in 'models/'. Simulated load.")
         except Exception as e:
-            print(f"[WARNING] Could not load models: {e}. Simulated load.")
+            print(f"[WARNING] Could not load Stable-Baselines3 models: {e}. Simulated load.")
     else:
         print("[WARNING] Dependencies (joblib, stable-baselines3) missing. Skipping model/matrix load.")
 

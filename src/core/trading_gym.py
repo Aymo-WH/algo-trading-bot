@@ -22,7 +22,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10, xgb_model_path=None):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, xgb_model_path=None):
         """
         Initializes the trading environment and pre-loads data into memory caches to O(1) step access.
 
@@ -31,17 +31,7 @@ class TradingEnv(gym.Env):
             is_discrete (bool): If True, use discrete actions (e.g. for DQN). Defaults to False.
             data_dir (str): Directory containing preprocessed CSV files. Defaults to 'data/'.
             transaction_fee_percent (float, optional): Custom fee. Overrides config.json.
-            window_size (int): Lookback sequence length for state observations. Defaults to 10.
             xgb_model_path (str, optional): Path to the XGBoost model to generate signal/probability.
-        """
-        """
-        Initialize the Trading Environment.
-
-        :param df: Pandas DataFrame containing historical data. If None, loads from data_dir.
-        :param is_discrete: Boolean flag for discrete action space (True) or continuous (False).
-        :param data_dir: Directory path to load data from if df is None.
-        :param transaction_fee_percent: Transaction fee as a percentage of trade value (default None -> load from config or 0.001).
-        :param window_size: Size of the observation window (default 10).
         """
         super(TradingEnv, self).__init__()
 
@@ -52,8 +42,6 @@ class TradingEnv(gym.Env):
             self.transaction_fee_percent = config.get('transaction_fee_percent', 0.001)
         else:
             self.transaction_fee_percent = transaction_fee_percent
-
-        self.window_size = window_size
 
         # Load XGBoost model if provided
         self.xgb_model = None
@@ -81,7 +69,7 @@ class TradingEnv(gym.Env):
                     # Load each file
                     try:
                         df_loaded = pd.read_csv(file).dropna().reset_index(drop=True)
-                        if len(df_loaded) < self.window_size + 2:
+                        if len(df_loaded) < 2:
                             print(f"Skipping {file}: Empty or not enough rows after dropna.")
                             continue
 
@@ -108,8 +96,8 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            # Only pull the 4 features XGBoost needs
-            obs = d[['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
+            # Drop Sentiment_Score and PCA_5, now 5 core features
+            obs = d[['Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
             prices = d['Close'].values
             atr = prices * 0.02 # Removed ATR dependency
             opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
@@ -142,7 +130,6 @@ class TradingEnv(gym.Env):
         self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
-        self.peak_net_worth = 10000.0
         self.current_step = 0
         self.episode_length = 90
 
@@ -179,8 +166,8 @@ class TradingEnv(gym.Env):
         if options and 'start_step' in options:
             self.current_step = options['start_step']
         else:
-            # Generate random start step ensuring we have enough data for at least one step + window
-            max_step = len(self.df) - self.window_size - 1
+            # Generate random start step ensuring we have enough data for at least one step
+            max_step = len(self.df) - 2
             self.current_step = random.randint(0, max_step) if max_step > 0 else 0
 
         self.start_step = self.current_step
@@ -311,27 +298,26 @@ class TradingEnv(gym.Env):
         pure_new_val = self.cash + (self.shares_held * new_price)
         daily_return = (pure_new_val - prev_val) / prev_val if prev_val > 0 else 0
             
-        self.peak_net_worth = max(self.peak_net_worth, pure_new_val)
-        drawdown = (self.peak_net_worth - pure_new_val) / self.peak_net_worth if self.peak_net_worth > 0 else 0.0
+        if daily_return > 0:
+            reward = daily_return * 100
+        else:
+            reward = (daily_return * 100) * 1.5
 
-        base_gross_profit = daily_return * 100
-        bet_size = abs(act)
-        turnover_penalty_coef = self.transaction_fee_percent * 100
-        variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
-        cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
+        # Hold Cash Penalty
+        if self.shares_held == 0:
+            reward -= 0.01
 
-        reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
+        # Explicit Negative Dividend (Prevents fake compounding)
+        reward -= (step_fee / prev_val) * 100 if prev_val > 0 else 0
     
-        # Terminate if we reach the end of the dataframe
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
-                     (self.current_step >= len(self.df) - 1) or \
+                     (self.current_step >= len(self.df)) or \
                      forced_termination
         truncated = False
             
         if pure_new_val < 1000:
             terminated = True
                 
-        # Update the 1D buffer for the new step
         self._get_single_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
     
         return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
@@ -377,8 +363,8 @@ class TradingEnv(gym.Env):
             mode (str): Rendering mode. Defaults to 'human'.
         """
         if mode == 'human':
-            # Calculate current price based on the current window position
-            decision_idx = self.current_step + self.window_size - 1
+            # Calculate current price based on the current position
+            decision_idx = self.current_step
 
             # Ensure we don't go out of bounds
             if decision_idx < len(self._prices):

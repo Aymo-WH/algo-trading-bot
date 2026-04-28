@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+import random
 import os
 import re
 import joblib
 from statsmodels.tsa.stattools import adfuller
+import scipy.stats as ss
 from core.optimize_barriers import get_rolling_barriers
 from numba import njit, prange
 
@@ -401,6 +403,7 @@ def fetch_data(config_path='config/config_phase1.json'):
         pca_features = pca.transform(scaled_tech)
 
         # Save matrices for Live Inference
+        import joblib
         joblib.dump(scaler, f'models/matrices/scaler_{clean_ticker}.pkl')
         joblib.dump(pca, f'models/matrices/pca_{clean_ticker}.pkl')
 

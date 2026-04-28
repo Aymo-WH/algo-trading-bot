@@ -17,7 +17,7 @@ import evaluate_agents
 
 with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
     gr.Markdown("# 🤖 The Gordian Project Dashboard - Portfolio Oversight")
-    gr.Markdown("### Architecture: Meta-Labeling (XGBoost Direction + PPO Bet Sizing)")
+    gr.Markdown("### Architecture: Meta-Labeling (DQN Direction + PPO Bet Sizing)")
     
     # Static Pedigree Badge
     gr.Markdown("**Laboratory PBO: 0.00% (Statistically Significant)**")

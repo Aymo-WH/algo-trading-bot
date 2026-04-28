@@ -52,14 +52,21 @@ To prevent Look-Ahead Bias, we applied Principal Component Analysis (PCA) strict
 \textbf{The Failure:} During the transition from the laboratory environment to a live inference script, the models generated profitable predictions in-sample but failed structurally out-of-sample. Forensic analysis revealed that while the PCA and Scaler matrices were fitted during data generation, they were never exported to disk. The live inference engine was attempting to feed raw, unscaled market prices into a Deep Q-Network that had learned a highly orthogonalized PCA state space.\\
 \textbf{The Solution:} We engineered a strict state-management protocol using `joblib`. The exact mathematical state of the `StandardScaler` and `PCA` transformations are dynamically exported to a dedicated `models/matrices/` directory per asset. The decoupled inference engine strictly loads these matrices before routing live broker data to the neural networks.
 
-\section{The Meta-Labeling Framework}
-A fundamental flaw in predictive modeling is conflating trade direction with conviction. We separated these concerns via a dual-network architecture:
+\section{The Meta-Labeling Framework (V2 Architecture)}
+A fundamental flaw in predictive modeling is conflating trade direction with conviction. We separated these concerns via a dual-agent meta-labeling architecture. The V2 architecture implements XGBoost for robust classification and PPO for meta-labeling risk management:
 \begin{itemize}
-    \item \textbf{Primary Model (DQN):} Generates directional signals (Long, Short, Hold).
-    \item \textbf{Secondary Model (PPO):} Analyzes orthogonalized state vectors to predict the probability $p$ of the DQN's success.
+    \item \textbf{Primary Model (XGBoost):} Trained using the Triple-Barrier Method to predict directional class labels $c \in \{0, 1, 2\}$, mapping directly to signals (-1.0, 0.0, 1.0).
+    \item \textbf{Secondary Model (PPO):} Receives a strictly constrained meta-feature state vector and outputs a continuous bet size $m \in [0.0, 1.0]$. The PPO agent strictly handles sizing and is structurally prevented from counter-trading the primary signal.
 \end{itemize}
-Bet sizes $m$ are scaled continuously using the Normal Cumulative Distribution Function based on the PPO's confidence:
-$$ z = \frac{p - 0.5}{\sqrt{p(1-p)}}, \quad m = 2Z[z] - 1 $$
+
+\subsection{Safe RL Reward Function}
+The `TradingEnv` is formulated as a Safe RL environment to enforce responsible bet-sizing by the PPO agent. The reward $R_t$ is computed not just as profit, but as Base Gross Profit minus several structured penalties:
+\begin{itemize}
+    \item \textbf{Turnover Penalty:} Transaction fees proportionally scaled by the bet size $m$.
+    \item \textbf{Variance Penalty:} An ATR-based volatility penalty scaled by the squared bet size $m^2$, penalizing large bets in volatile conditions.
+    \item \textbf{CVaR Penalty:} A catastrophic drawdown penalty that triggers severely if portfolio drawdown exceeds 5\%.
+\end{itemize}
+This formulation forces the PPO meta-labeler to act strictly as a risk manager rather than a profit-maximizer.
 
 \section{Stochastic Execution Barriers (O-U Process)}
 Optimizing execution barriers alongside neural network parameters leads to curve-fitting. We isolated execution logic by modeling asset dynamics as an Ornstein-Uhlenbeck stochastic process, estimating mean reversion speed ($\varphi$) and volatility ($\sigma$):
@@ -79,8 +86,9 @@ Hyperparameter tuning is governed by the Optuna engine utilizing a Tree-structur
 To quantify selection bias during optimization, we deployed Combinatorially Symmetric Cross-Validation (CSCV). We partition the out-of-sample matrix and evaluate all combinations to compute the logit $\lambda_c$. The Probability of Backtest Overfitting (PBO) is the cumulative distribution below zero:
 $$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
 
-\section{Architecture V1.5 Upgrades}
+\section{Architecture V2.0 Upgrades}
 \begin{itemize}
+    \item \textbf{Microstructural Shift:} Completely removed retail technical indicators, replacing them with institutionally robust microstructure signals: SADF, VPIN, Amihud's Illiquidity, and Kyle's Lambda.
     \item \textbf{Hybrid Vectorization:} Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
     \item \textbf{Data Leakage Prevention:} Explicitly defined a 60-Period Train/Test Embargo to strictly separate in-sample from out-of-sample datasets, eliminating predictive look-ahead bias.
     \item \textbf{Optimized Execution Barriers:} Utilized 3D Tensor broadcasting for calculating the Profit-Taking and Stop-Loss grids to enhance computational speed during localized grid searches.

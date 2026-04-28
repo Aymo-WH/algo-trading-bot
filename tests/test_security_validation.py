@@ -93,5 +93,24 @@ class TestTradingEnvSecurity(unittest.TestCase):
         for col in required_columns:
             self.assertEqual(loaded_df[col].dtype, np.float32)
 
+    def test_observation_space_1d(self):
+        self.clean_directory()
+        df_float64 = pd.DataFrame({
+            'Close': np.array([100.0] * 12, dtype=np.float64),
+            'Close_FFD': np.array([0.0] * 12, dtype=np.float64),
+            'PCA_1': np.array([50.0] * 12, dtype=np.float64),
+            'PCA_2': np.array([0.0] * 12, dtype=np.float64),
+            'PCA_3': np.array([110.0] * 12, dtype=np.float64),
+            'PCA_4': np.array([90.0] * 12, dtype=np.float64)
+        })
+        df_float64.to_csv(os.path.join(self.test_dir, 'float64_data.csv'), index=False)
+
+        env = TradingEnv(data_dir=self.test_dir)
+        obs, _ = env.reset()
+        self.assertEqual(obs.shape, (4,), "Observation space must be strictly 1D shape (4,)")
+
+        obs, _, _, _, _ = env.step(env.action_space.sample() if hasattr(env, 'action_space') and env.action_space else 0)
+        self.assertEqual(obs.shape, (4,), "Observation space must be strictly 1D shape (4,) after step")
+
 if __name__ == '__main__':
     unittest.main()

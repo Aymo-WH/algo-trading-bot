@@ -18,26 +18,6 @@ INITIAL_CAPITAL = 10000.0
 
 # Global cache for S&P 500 benchmark data to prevent redundant downloads
 _GSPC_CACHE = None
-_GSPC_CACHE_PARTS = []
-
-def _consolidate_gspc_cache():
-    """
-    Consolidates accumulated S&P 500 data parts into the main cache.
-    Using list-based accumulation and a single concat is more efficient than
-    repeatedly calling pd.concat in a loop.
-    """
-    global _GSPC_CACHE, _GSPC_CACHE_PARTS
-    if not _GSPC_CACHE_PARTS:
-        return _GSPC_CACHE
-
-    if _GSPC_CACHE is not None:
-        _GSPC_CACHE = pd.concat([_GSPC_CACHE] + _GSPC_CACHE_PARTS)
-    else:
-        _GSPC_CACHE = pd.concat(_GSPC_CACHE_PARTS)
-
-    _GSPC_CACHE = _GSPC_CACHE.drop_duplicates().sort_index()
-    _GSPC_CACHE_PARTS = []
-    return _GSPC_CACHE
 
 def calculate_cagr(start_value, end_value, start_date, end_date):
     """
@@ -226,14 +206,9 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
         end_date (datetime): End of the evaluation window.
         sp500_df (pd.DataFrame, optional): A pre-fetched benchmark DataFrame.
     """
-    global _GSPC_CACHE, _GSPC_CACHE_PARTS
+    global _GSPC_CACHE
     try:
-        # If no explicit DataFrame is provided, check if our cache covers it.
-        # Consolidate parts first if we are relying on the global cache.
-        if sp500_df is None:
-            source_df = _consolidate_gspc_cache()
-        else:
-            source_df = sp500_df
+        source_df = sp500_df if sp500_df is not None else _GSPC_CACHE
 
         # Download if we don't have a source or if dates are out of bounds
         is_covered = (
@@ -248,9 +223,12 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
             new_data = yf.download("^GSPC", start=start_date, end=end_date + pd.Timedelta(days=1), progress=False)
             new_data = flatten_multiindex_columns(new_data)
 
-            # Append to parts for efficient batch consolidation later
-            _GSPC_CACHE_PARTS.append(new_data)
-            source_df = _consolidate_gspc_cache()
+            if _GSPC_CACHE is None:
+                _GSPC_CACHE = new_data
+            else:
+                _GSPC_CACHE = pd.concat([_GSPC_CACHE, new_data]).drop_duplicates().sort_index()
+
+            source_df = _GSPC_CACHE
 
         if source_df is None or source_df.empty:
             return 0.0, 0.0
@@ -285,7 +263,7 @@ def main(active_tickers=None):
     print("Starting Evaluation...")
 
     # Find Models
-    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip")) + glob.glob(os.path.join(MODELS_DIR, "*.json"))
+    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip"))
     if not model_files:
         print("No models found in models/")
         return
@@ -363,9 +341,10 @@ def main(active_tickers=None):
                 new_data = yf.download("^GSPC", start=global_min_date_buffered, end=global_max_date_buffered, progress=False)
                 new_data = flatten_multiindex_columns(new_data)
 
-                # Efficient accumulation
-                _GSPC_CACHE_PARTS.append(new_data)
-                _consolidate_gspc_cache()
+                if _GSPC_CACHE is None:
+                    _GSPC_CACHE = new_data
+                else:
+                    _GSPC_CACHE = pd.concat([_GSPC_CACHE, new_data]).drop_duplicates().sort_index()
 
             except Exception as e:
                 print(f"Error pre-fetching S&P 500 data: {e}")
