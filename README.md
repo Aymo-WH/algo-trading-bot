@@ -38,7 +38,7 @@ The project follows a strict modular architecture, isolating core engine logic f
 
 *   **`data_factory.py`**: The data pipeline. Fetches a rolling 730-day window of intraday data, compresses it into Information-Driven Dollar Bars, applies point-in-time PCA and FFD, and exports fitted mathematical matrices (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
 *   **`core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
-*   **`core/meta_agent.py`**: Combines the primary DQN model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
+*   **`core/meta_agent.py`**: Combines the primary XGBoost model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
 *   **`core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
 *   **`core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
 
@@ -60,7 +60,7 @@ python data_factory.py --config config/config_phase1.json
 ```
 
 ### 3. Agent Training (`train_agent.py`)
-Provides core utilities (`train_dqn`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
+Provides core utilities (`train_xgb`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
 
 ### 4. Headless Optimization (`research/optimize_agents.py`)
 Run headless hyperparameter optimization using Optuna. The engine loops through the specified basket of active tickers, tracking out-of-sample returns to build a True PBO matrix.

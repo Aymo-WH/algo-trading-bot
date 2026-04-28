@@ -6,9 +6,69 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from data_factory import construct_dollar_bars
+from data_factory import construct_dollar_bars, fetch_data, rolling_sadf_np
 
 class TestDataFactory(unittest.TestCase):
+
+    @unittest.mock.patch('data_factory.yf')
+    @unittest.mock.patch('data_factory.os.makedirs')
+    @unittest.mock.patch('data_factory.pd.DataFrame.to_csv')
+    @unittest.mock.patch('data_factory.joblib.dump')
+    @unittest.mock.patch('core.utils.load_config')
+    def test_microstructural_features_integrated(self, mock_load_config, mock_dump, mock_to_csv, mock_makedirs, mock_yfinance):
+        # Mock config
+        mock_load_config.return_value = {
+            'tickers': ['TEST'],
+            'transaction_fee_percent': 0.001,
+            'data_window_days': 730
+        }
+
+        # Create a mock dataframe that yfinance will return
+        dates = pd.date_range(start='2020-01-01', periods=500, freq='h')
+        mock_df = pd.DataFrame({
+            'Open': np.linspace(10, 20, 500),
+            'High': np.linspace(10.5, 20.5, 500),
+            'Low': np.linspace(9.5, 19.5, 500),
+            'Close': np.linspace(10.2, 20.2, 500) + np.random.normal(0, 0.1, 500),
+            'Volume': np.random.randint(100, 1000, 500).astype(float)
+        }, index=dates)
+
+        # Make yfinance return this df
+        mock_yfinance.download.return_value = mock_df
+
+        # We also need to mock `get_rolling_barriers` and `adfuller` to avoid complex test setups
+        with unittest.mock.patch('data_factory.get_rolling_barriers') as mock_barriers:
+            mock_barriers_df = pd.DataFrame({
+                'Optimal_PT': [2.0]*500,
+                'Optimal_SL': [2.0]*500
+            }, index=mock_df.index) # index won't perfectly match dollar bars but that's ok, fillna handles it
+            mock_barriers.return_value = mock_barriers_df
+
+            with unittest.mock.patch('data_factory.adfuller') as mock_adf:
+                mock_adf.return_value = (0, 0.01) # fake p-value < 0.05
+
+                # Mock construct_dollar_bars to just return the df without compressing to avoid size issues
+                with unittest.mock.patch('data_factory.construct_dollar_bars', return_value=mock_df):
+
+                    # Capture the dataframe right before PCA is applied
+                    captured_df = None
+                    original_dropna = pd.DataFrame.dropna
+
+                    def mock_dropna(self_df, *args, **kwargs):
+                        nonlocal captured_df
+                        captured_df = self_df
+                        return original_dropna(self_df, *args, **kwargs)
+
+                    with unittest.mock.patch('pandas.DataFrame.dropna', side_effect=mock_dropna, autospec=True):
+                        with unittest.mock.patch('builtins.open', unittest.mock.mock_open(read_data='{"tickers": ["TEST"], "transaction_fee_percent": 0.001, "data_window_days": 730}')):
+                            fetch_data('dummy_path.json')
+
+                        # Assertions on the captured dataframe
+                        self.assertIsNotNone(captured_df)
+                        self.assertIn('VPIN', captured_df.columns)
+                        self.assertIn('Amihud_Illiq', captured_df.columns)
+                        self.assertIn('Kyles_Lambda', captured_df.columns)
+                        self.assertIn('SADF', captured_df.columns)
 
     def test_construct_dollar_bars(self):
         # Construct dummy DataFrame with a DatetimeIndex and 300 rows
