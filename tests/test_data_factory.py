@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from data_factory import construct_dollar_bars
+from data_factory import construct_dollar_bars, calculate_microstructural_features
 
 class TestDataFactory(unittest.TestCase):
 
@@ -68,6 +68,32 @@ class TestDataFactory(unittest.TestCase):
 
         # Check index name is 'Date'
         self.assertEqual(result_df.index.name, 'Date')
+
+
+    def test_calculate_microstructural_features(self):
+        # Create a mock dataframe with enough data for SADF (window=100) and rolling features (window=50)
+        dates = [datetime(2023, 1, 1) + timedelta(days=i) for i in range(150)]
+        np.random.seed(42) # For deterministic SADF
+
+        # We need realistic price action for SADF to not be all NaN or infinity
+        closes = np.cumsum(np.random.randn(150)) + 100
+        volumes = np.random.randint(100, 1000, size=150).astype(float)
+
+        df = pd.DataFrame({
+            'Close': closes,
+            'Volume': volumes
+        }, index=dates)
+
+        result_df = calculate_microstructural_features(df.copy())
+
+        # Check that the microstructural columns have been successfully added
+        expected_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
+        for col in expected_cols:
+            self.assertIn(col, result_df.columns, f"Missing microstructural feature column: {col}")
+
+        # Verify that they are not all NaN (the first window-1 rows will be NaN, but later rows should have values)
+        for col in expected_cols:
+            self.assertTrue(result_df[col].notna().any(), f"Column {col} is all NaN, calculation failed.")
 
     def test_empty_dataframe(self):
         # Empty DataFrame with correct columns
