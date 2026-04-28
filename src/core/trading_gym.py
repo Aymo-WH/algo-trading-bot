@@ -262,7 +262,12 @@ class TradingEnv(gym.Env):
             mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
             act = mapping[int(action)]
         else:
-            act = float(action[0])
+            # PPO outputs bet size [0.0, 1.0]
+            bet_size = float(action[0])
+            # Retrieve the XGBoost signal (-1.0, 0.0, 1.0) from the current observation buffer
+            xgb_signal = self.obs_buffer[0]
+            # Actual market action is Direction * Size
+            act = xgb_signal * bet_size
             
         step_fee = 0.0
             

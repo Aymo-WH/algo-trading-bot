@@ -157,7 +157,8 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         # Start date is at start_step
         # End date is the current step (end of episode)
         ep_start_date = df['Date'].iloc[start_step]
-        ep_end_date = df['Date'].iloc[env.current_step]
+        safe_end_step = min(env.current_step, len(df) - 1)
+        ep_end_date = df['Date'].iloc[safe_end_step]
         cagr = calculate_cagr(INITIAL_CAPITAL, final_value, ep_start_date, ep_end_date) * 100
 
         roi_list.append(roi)
