@@ -10,7 +10,7 @@ import torch
 import random
 from stable_baselines3.common.callbacks import BaseCallback
 
-from train_agent import train_dqn, train_ppo
+from train_agent import train_xgb, train_ppo
 from evaluate_agents import evaluate_model
 from core.pbo_validator import PBOValidator
 
@@ -29,8 +29,8 @@ def set_global_seed(seed=42):
 
 def objective(trial, timesteps, ticker):
     # 1. Sample Hyperparameters using Log-Uniform distributions
-    dqn_lr = trial.suggest_float("dqn_lr", 1e-5, 1e-3, log=True)
-    dqn_target_update = trial.suggest_int("dqn_target_update", 1000, 10000)
+    xgb_lr = trial.suggest_float("learning_rate", 1e-3, 0.3, log=True)
+    xgb_max_depth = trial.suggest_int("max_depth", 3, 10)
 
     ppo_lr = trial.suggest_float("ppo_lr", 1e-5, 1e-3, log=True)
     ppo_clip = trial.suggest_float("ppo_clip", 0.1, 0.4)
@@ -39,11 +39,11 @@ def objective(trial, timesteps, ticker):
     print(f"\n--- Trial {trial.number} ({ticker}) ---")
 
     # 2. Train Models with these specific hyperparameters
-    dqn_model = train_dqn(ticker=ticker, total_timesteps=timesteps, dqn_lr=dqn_lr, dqn_target_update=dqn_target_update)
+    xgb_model = train_xgb(ticker=ticker, learning_rate=xgb_lr, max_depth=xgb_max_depth)
     ppo_model = train_ppo(ticker=ticker, total_timesteps=timesteps, ppo_lr=ppo_lr, ppo_clip=ppo_clip, ppo_ent=ppo_ent)
 
     # 3. Evaluate Out-Of-Sample
-    _, _, oos_returns = evaluate_model(dqn_model, ppo_model, ticker=ticker)
+    _, _, oos_returns = evaluate_model(xgb_model, ppo_model, ticker=ticker)
 
     # 4. Save the chronological return path to our global dictionary
     TRIAL_RETURNS_MATRIX[f"Trial_{trial.number}"] = oos_returns
@@ -88,11 +88,10 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
         # Re-train the models using the best discovered hyperparameters to 'restore' the engine
         print(f"\n[SYSTEM] Restoring execution engine for {ticker}...")
 
-        best_dqn = train_dqn(
+        best_xgb = train_xgb(
             ticker=ticker,
-            total_timesteps=timesteps,
-            dqn_lr=study.best_params.get("dqn_lr"),
-            dqn_target_update=study.best_params.get("dqn_target_update")
+            learning_rate=study.best_params.get("learning_rate"),
+            max_depth=study.best_params.get("max_depth")
         )
         best_ppo = train_ppo(
             ticker=ticker,
@@ -104,7 +103,7 @@ def run_optimization(n_trials=20, timesteps=10000, config_path='config/config_ph
 
         # Save to the specific paths expected by live_inference.py
         os.makedirs("models", exist_ok=True)
-        best_dqn.save("models/dqn_trading_bot")
+        best_xgb.save_model("models/xgb_trading_bot.json")
         best_ppo.save("models/ppo_meta_labeler")
         print(f"✅ Execution engine restored: Best models for {ticker} saved to models/.")
 
