@@ -49,7 +49,7 @@ class TradingEnv(gym.Env):
 
         if transaction_fee_percent is None:
             config = load_config()
-            self.transaction_fee_percent = config.get('transaction_fee_percent', 0.001)
+            self.transaction_fee_percent = config.get('transaction_fee_percent', 0.0005)
         else:
             self.transaction_fee_percent = transaction_fee_percent
 
