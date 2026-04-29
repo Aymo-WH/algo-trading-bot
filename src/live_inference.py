@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+import ccxt
 try:
     import joblib
     from stable_baselines3 import PPO
@@ -78,6 +79,12 @@ def run_live_inference(config_path):
         print("[SYSTEM] Scaler & PCA Matrices Aligned.")
     else:
         print("[SYSTEM] Some Matrices missing. Ensure data_factory.py has been run.")
+
+    exchange = ccxt.binance({
+        'apiKey': os.getenv('BINANCE_API_KEY'),
+        'secret': os.getenv('BINANCE_SECRET')
+    })
+    exchange.set_sandbox_mode(True)
 
     print("\n--- LIVE MARKET EXECUTION STREAM ---")
     actions = ["LONG", "SHORT", "HOLD"]
