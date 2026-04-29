@@ -82,10 +82,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
     # If the model is not the MetaAgent and not XGB, we still need to provide the XGB model
     # to the environment so it can construct the observation if PPO expects it.
-    xgb_path = "models/xgb_trading_bot.json"
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path=xgb_path)
+    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.json")
 
     # Ensure episode length aligns with our non-overlapping windows
     env.episode_length = len(df) // 5
@@ -285,10 +284,12 @@ def main(active_tickers=None):
     """
     print("Starting Evaluation...")
 
-    # Find Models
-    model_files = glob.glob(os.path.join(MODELS_DIR, "*.zip")) + glob.glob(os.path.join(MODELS_DIR, "*.json"))
-    if not model_files:
-        print("No models found in models/")
+    # Load Primary Target Model directly instead of searching all models
+    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
+    ppo_path = os.path.join(MODELS_DIR, "ppo_trading_bot.zip")
+
+    if not os.path.exists(xgb_path) or not os.path.exists(ppo_path):
+        print("Required models (xgb_trading_bot.json, ppo_trading_bot.zip) not found in models/")
         return
 
     # Find Data
@@ -410,23 +411,15 @@ def main(active_tickers=None):
         stock_bh_benchmarks[stock_name] = np.mean(bh_rois)
 
 
-    # Load Standalone Models
+    # Load Models
     models_to_eval = {}
-    for model_path in model_files:
-        model_name = os.path.basename(model_path).replace(".zip", "")
-        try:
-            model = load_agent(model_path)
-            models_to_eval[model_name] = model
-        except Exception as e:
-            print(f"Failed to load {model_name}: {e}")
-            continue
-
-    # Load and Instantiate MetaAgent if both XGBoost and PPO are present
-    xgb_model = next((m for name, m in models_to_eval.items() if "xgb" in name.lower()), None)
-    ppo_model = next((m for name, m in models_to_eval.items() if "ppo" in name.lower()), None)
-
-    if xgb_model and ppo_model:
-        models_to_eval["Meta-Architecture (PPO Engine)"] = ppo_model
+    try:
+        ppo_model = load_agent(ppo_path)
+        # We explicitly load the PPO model as the evaluation target
+        models_to_eval["Meta-Architecture (PPO + XGB)"] = ppo_model
+    except Exception as e:
+        print(f"Failed to load PPO model: {e}")
+        return
 
     for model_name, model in models_to_eval.items():
         # print(f"Evaluating Model: {model_name}")
