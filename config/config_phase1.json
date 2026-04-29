@@ -8,6 +8,6 @@
     "TQQQ",
     "VXX"
   ],
-  "transaction_fee_percent": 0.001,
+  "transaction_fee_percent": 0.0001,
   "data_window_days": 730
 }
