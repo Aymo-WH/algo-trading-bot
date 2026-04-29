@@ -321,7 +321,7 @@ class TradingEnv(gym.Env):
 
         base_gross_profit = daily_return * 100
         bet_size = abs(act)
-        turnover_penalty_coef = 0.0005
+        turnover_penalty_coef = 0.0001
         variance_penalty_coef = (current_atr / current_price) * 50 if current_price > 0 else 0.0
         cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
 
