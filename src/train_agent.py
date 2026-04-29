@@ -160,7 +160,7 @@ def main():
             vec_env_cls=SubprocVecEnv
         )
         env.action_space.seed(42)
-        model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01, seed=42)
+        model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.08, seed=42)
         model.learn(total_timesteps=args.timesteps)
         model.save(save_path)
         print("Training complete and model saved.")

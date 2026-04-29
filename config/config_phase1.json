@@ -1,12 +1,7 @@
 {
   "tickers": [
-    "XLK",
-    "XLF",
-    "XLE",
     "BTC-USD",
-    "ETH-USD",
-    "TQQQ",
-    "VXX"
+    "ETH-USD"
   ],
   "transaction_fee_percent": 0.001,
   "data_window_days": 730

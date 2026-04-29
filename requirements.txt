@@ -11,3 +11,4 @@ gradio
 scipy
 runpod-flash
 ccxt
+python-dotenv
