@@ -2,12 +2,17 @@ import argparse
 import json
 import os
 import random
+import time
 import ccxt
+import pandas as pd
+import numpy as np
+
 try:
     import joblib
     from stable_baselines3 import PPO
     from core.utils import load_agent
     from core.meta_agent import MetaAgent
+    from data_factory import calculate_microstructural_features
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -54,8 +59,15 @@ def run_live_inference(config_path):
     else:
         print("[WARNING] Dependencies (joblib, stable-baselines3) missing. Skipping model/matrix load.")
 
+    exchange = ccxt.binance({
+        'apiKey': os.getenv('BINANCE_API_KEY'),
+        'secret': os.getenv('BINANCE_SECRET')
+    })
+
     # Load Matrices
     matrices_aligned = True
+    scalers = {}
+    pcas = {}
     if HAS_DEPENDENCIES:
         for ticker in tickers:
             clean_ticker = os.path.basename(ticker)
@@ -64,8 +76,8 @@ def run_live_inference(config_path):
 
             if os.path.exists(scaler_path) and os.path.exists(pca_path):
                 try:
-                    scaler = joblib.load(scaler_path)
-                    pca = joblib.load(pca_path)
+                    scalers[ticker] = joblib.load(scaler_path)
+                    pcas[ticker] = joblib.load(pca_path)
                 except Exception as e:
                     print(f"[ERROR] Failed to load matrices for {ticker}: {e}")
                     matrices_aligned = False
@@ -87,11 +99,58 @@ def run_live_inference(config_path):
     exchange.set_sandbox_mode(True)
 
     print("\n--- LIVE MARKET EXECUTION STREAM ---")
-    actions = ["LONG", "SHORT", "HOLD"]
-    for ticker in tickers:
-        action = random.choice(actions)
-        conviction = random.uniform(50.0, 99.9)
-        print(f"[MARKET] Target: {ticker} | Action: {action} | Conviction (PPO): {conviction:.1f}%")
+    interval = config.get("interval", "5m")
+    if interval == "5m":
+        sleep_time = 300
+    else:
+        sleep_time = 60
+
+    while True:
+        for ticker in tickers:
+            try:
+                symbol = ticker.replace('-', '/')
+
+                ohlcv = exchange.fetch_ohlcv(symbol, timeframe=interval, limit=60)
+                df = pd.DataFrame(ohlcv, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+                df['Date'] = pd.to_datetime(df['Date'], unit='ms')
+                df.set_index('Date', inplace=True)
+
+                df = calculate_microstructural_features(df)
+                df.fillna(method='bfill', inplace=True)
+                df.fillna(0.0, inplace=True)
+
+                tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
+                latest_features = df[tech_cols].iloc[-1:].values
+
+                if ticker in scalers and ticker in pcas:
+                    scaled_features = scalers[ticker].transform(latest_features)
+                    pca_features = pcas[ticker].transform(scaled_features)
+
+                    current_price = df['Close'].iloc[-1]
+                    volatility = df['Close'].pct_change().std() if len(df) > 1 else 0.0
+                    peak = df['Close'].max()
+                    drawdown = (peak - current_price) / peak if peak > 0 else 0.0
+
+                    if meta_agent is not None:
+                        action, _ = meta_agent.predict(pca_features, volatility, drawdown)
+                        action_val = action[0] if isinstance(action, (list, np.ndarray)) else action
+                        amount = abs(action_val)
+
+                        if os.getenv("LIVE_TRADING") == "TRUE":
+                            if action_val > 0:
+                                exchange.create_market_buy_order(symbol, amount)
+                            elif action_val < 0:
+                                exchange.create_market_sell_order(symbol, amount)
+                        else:
+                            print(f"PAPER TRADE: {ticker} | Action: {action_val:.4f} | Size: {amount:.4f}")
+                    else:
+                        print(f"[WARNING] MetaAgent not loaded, skipping execution for {ticker}")
+                else:
+                    print(f"[WARNING] Skipping execution for {ticker}, matrices missing.")
+            except Exception as e:
+                print(f"[ERROR] Live loop execution failed for {ticker}: {e}")
+
+        time.sleep(sleep_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live Inference Engine")
