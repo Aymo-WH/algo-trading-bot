@@ -10,3 +10,4 @@ optuna
 gradio
 scipy
 runpod-flash
+ccxt
