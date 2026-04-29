@@ -92,6 +92,12 @@ def run_live_inference(config_path):
     else:
         print("[SYSTEM] Some Matrices missing. Ensure data_factory.py has been run.")
 
+    exchange = ccxt.binance({
+        'apiKey': os.getenv('BINANCE_API_KEY'),
+        'secret': os.getenv('BINANCE_SECRET')
+    })
+    exchange.set_sandbox_mode(True)
+
     print("\n--- LIVE MARKET EXECUTION STREAM ---")
     interval = config.get("interval", "5m")
     if interval == "5m":
