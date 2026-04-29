@@ -6,6 +6,7 @@ try:
     import joblib
     from stable_baselines3 import PPO
     from core.utils import load_agent
+    from core.meta_agent import MetaAgent
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -32,7 +33,9 @@ def run_live_inference(config_path):
 
     # Load Brains
     xgb_path = "models/xgb_trading_bot.json"
-    ppo_path = "models/ppo_meta_labeler.zip"
+    ppo_path = "models/ppo_trading_bot.zip"
+
+    meta_agent = None
 
     # Try to load models. Just a simulation check to make sure they'd load
     if HAS_DEPENDENCIES:
@@ -41,6 +44,7 @@ def run_live_inference(config_path):
             if os.path.exists(xgb_path) and os.path.exists(ppo_path):
                 xgb_model = load_agent(xgb_path)
                 ppo_model = PPO.load(ppo_path)
+                meta_agent = MetaAgent(xgb_model, ppo_model)
                 print("[SYSTEM] Brains Loaded.")
             else:
                 print("[WARNING] Models not found in 'models/'. Simulated load.")
