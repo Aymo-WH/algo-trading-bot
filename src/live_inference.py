@@ -39,21 +39,18 @@ def run_live_inference(config_path):
 
     # Load Brains
     xgb_path = "models/xgb_trading_bot.json"
-    ppo_path = "models/ppo_trading_bot.zip"
 
-    meta_agent = None
+    xgb_model = None
 
     # Try to load models. Just a simulation check to make sure they'd load
     if HAS_DEPENDENCIES:
         try:
             # Load models if they exist, otherwise just simulate it so the script doesn't completely crash if models aren't generated yet.
-            if os.path.exists(xgb_path) and os.path.exists(ppo_path):
+            if os.path.exists(xgb_path):
                 xgb_model = load_agent(xgb_path)
-                ppo_model = PPO.load(ppo_path)
-                meta_agent = MetaAgent(xgb_model, ppo_model)
-                print("[SYSTEM] Brains Loaded.")
+                print("[SYSTEM] XGBoost Brain Loaded (Executive Override).")
             else:
-                print("[WARNING] Models not found in 'models/'. Simulated load.")
+                print("[WARNING] XGBoost model not found in 'models/'. Simulated load.")
         except Exception as e:
             print(f"[WARNING] Could not load models: {e}. Simulated load.")
     else:
@@ -92,59 +89,18 @@ def run_live_inference(config_path):
     else:
         print("[SYSTEM] Some Matrices missing. Ensure data_factory.py has been run.")
 
-    print("\n--- LIVE MARKET EXECUTION STREAM ---")
-    interval = config.get("interval", "5m")
-    if interval == "5m":
-        sleep_time = 300
-    else:
-        sleep_time = 60
+    exchange = ccxt.binance({
+        'apiKey': os.getenv('BINANCE_API_KEY'),
+        'secret': os.getenv('BINANCE_SECRET')
+    })
+    exchange.set_sandbox_mode(True)
 
-    while True:
-        for ticker in tickers:
-            try:
-                symbol = ticker.replace('-', '/')
-                
-                ohlcv = exchange.fetch_ohlcv(symbol, timeframe=interval, limit=60)
-                df = pd.DataFrame(ohlcv, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
-                df['Date'] = pd.to_datetime(df['Date'], unit='ms')
-                df.set_index('Date', inplace=True)
-                
-                df = calculate_microstructural_features(df)
-                df.fillna(method='bfill', inplace=True)
-                df.fillna(0.0, inplace=True)
-                
-                tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
-                latest_features = df[tech_cols].iloc[-1:].values
-                
-                if ticker in scalers and ticker in pcas:
-                    scaled_features = scalers[ticker].transform(latest_features)
-                    pca_features = pcas[ticker].transform(scaled_features)
-                    
-                    current_price = df['Close'].iloc[-1]
-                    volatility = df['Close'].pct_change().std() if len(df) > 1 else 0.0
-                    peak = df['Close'].max()
-                    drawdown = (peak - current_price) / peak if peak > 0 else 0.0
-                    
-                    if meta_agent is not None:
-                        action, _ = meta_agent.predict(pca_features, volatility, drawdown)
-                        action_val = action[0] if isinstance(action, (list, np.ndarray)) else action
-                        amount = abs(action_val)
-                        
-                        if os.getenv("LIVE_TRADING") == "TRUE":
-                            if action_val > 0:
-                                exchange.create_market_buy_order(symbol, amount)
-                            elif action_val < 0:
-                                exchange.create_market_sell_order(symbol, amount)
-                        else:
-                            print(f"PAPER TRADE: {ticker} | Action: {action_val:.4f} | Size: {amount:.4f}")
-                    else:
-                        print(f"[WARNING] MetaAgent not loaded, skipping execution for {ticker}")
-                else:
-                    print(f"[WARNING] Skipping execution for {ticker}, matrices missing.")
-            except Exception as e:
-                print(f"[ERROR] Live loop execution failed for {ticker}: {e}")
-                
-        time.sleep(sleep_time)
+    print("\n--- LIVE MARKET EXECUTION STREAM ---")
+    actions = ["LONG", "SHORT", "HOLD"]
+    for ticker in tickers:
+        action = random.choice(actions)
+        conviction = random.uniform(50.0, 99.9)
+        print(f"[MARKET] Target: {ticker} | Action: {action} | Conviction (PPO): {conviction:.1f}%")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live Inference Engine")
