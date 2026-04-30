@@ -271,7 +271,7 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
 
     learning_rate = kwargs.get('ppo_lr', 3e-4)
     clip_range = kwargs.get('ppo_clip', 0.2)
-    ent_coef = kwargs.get('ppo_ent', 0.01)
+    ent_coef = kwargs.get('ppo_ent', 0.08)
 
     is_discrete = False
     data_dir = "data/train/"
