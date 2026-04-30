@@ -39,21 +39,18 @@ def run_live_inference(config_path):
 
     # Load Brains
     xgb_path = "models/xgb_trading_bot.json"
-    ppo_path = "models/ppo_trading_bot.zip"
 
-    meta_agent = None
+    xgb_model = None
 
     # Try to load models. Just a simulation check to make sure they'd load
     if HAS_DEPENDENCIES:
         try:
             # Load models if they exist, otherwise just simulate it so the script doesn't completely crash if models aren't generated yet.
-            if os.path.exists(xgb_path) and os.path.exists(ppo_path):
+            if os.path.exists(xgb_path):
                 xgb_model = load_agent(xgb_path)
-                ppo_model = PPO.load(ppo_path)
-                meta_agent = MetaAgent(xgb_model, ppo_model)
-                print("[SYSTEM] Brains Loaded.")
+                print("[SYSTEM] XGBoost Brain Loaded (Executive Override).")
             else:
-                print("[WARNING] Models not found in 'models/'. Simulated load.")
+                print("[WARNING] XGBoost model not found in 'models/'. Simulated load.")
         except Exception as e:
             print(f"[WARNING] Could not load models: {e}. Simulated load.")
     else:
@@ -131,20 +128,24 @@ def run_live_inference(config_path):
                     peak = df['Close'].max()
                     drawdown = (peak - current_price) / peak if peak > 0 else 0.0
 
-                    if meta_agent is not None:
-                        action, _ = meta_agent.predict(pca_features, volatility, drawdown)
-                        action_val = action[0] if isinstance(action, (list, np.ndarray)) else action
-                        amount = abs(action_val)
+                    if xgb_model is not None:
+                        probs = xgb_model.predict_proba(pca_features.reshape(1, -1))[0]
+                        xgb_prediction = float(np.argmax(probs))
+                        xgb_confidence = float(probs[int(xgb_prediction)])
+                        amount = 0.01
 
-                        if os.getenv("LIVE_TRADING") == "TRUE":
-                            if action_val > 0:
+                        if xgb_prediction == 2.0:
+                            print(f"[MARKET] FIRE MARKET BUY. Confidence: {xgb_confidence:.4f}")
+                            if os.getenv("LIVE_TRADING") == "TRUE":
                                 exchange.create_market_buy_order(symbol, amount)
-                            elif action_val < 0:
+                        elif xgb_prediction == 0.0:
+                            print(f"[MARKET] FIRE MARKET SELL. Confidence: {xgb_confidence:.4f}")
+                            if os.getenv("LIVE_TRADING") == "TRUE":
                                 exchange.create_market_sell_order(symbol, amount)
-                        else:
-                            print(f"PAPER TRADE: {ticker} | Action: {action_val:.4f} | Size: {amount:.4f}")
+                        elif xgb_prediction == 1.0:
+                            pass
                     else:
-                        print(f"[WARNING] MetaAgent not loaded, skipping execution for {ticker}")
+                        print(f"[WARNING] XGBoost model not loaded, skipping execution for {ticker}")
                 else:
                     print(f"[WARNING] Skipping execution for {ticker}, matrices missing.")
             except Exception as e:
