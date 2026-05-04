@@ -41,7 +41,6 @@ def run_live_inference(config_path):
         print("[ERROR] No tickers found in config.")
         return
 
-    # Load Brain
     xgb_path = "models/xgb_trading_bot.json"
     
     if not os.path.exists(xgb_path):
@@ -52,7 +51,6 @@ def run_live_inference(config_path):
     model = xgb.XGBClassifier()
     model.load_model(xgb_path)
 
-    # Boot Exchange Connection
     print("[SYSTEM] Connecting to Binance Testnet...")
     exchange = ccxt.binance({
         'apiKey': os.getenv('BINANCE_API_KEY'),
@@ -104,7 +102,6 @@ def run_live_inference(config_path):
             
         raw_features = latest_data[feature_cols].values
 
-        # --- THE MATRIX FIX (Using your new matrices/ folder) ---
         clean_ticker = os.path.basename(ticker)
         scaler_path = f"models/matrices/scaler_{clean_ticker}.pkl"
         pca_path = f"models/matrices/pca_{clean_ticker}.pkl"
@@ -113,21 +110,16 @@ def run_live_inference(config_path):
             print(f"[WARNING] Missing matrices in models/matrices/. Skipping {ticker}.")
             continue
             
-        # Load the specific matrices for this specific ticker
         scaler = joblib.load(scaler_path)
         pca = joblib.load(pca_path)
 
-        # Scale, then Compress (PCA to 4 components)
         scaled_features = scaler.transform(raw_features)
         pca_features = pca.transform(scaled_features)
 
-        # Predict using the 4 PCA components
         prediction = model.predict(pca_features)[0]
         probabilities = model.predict_proba(pca_features)[0]
         confidence = max(probabilities)
-        # -----------------------
 
-        # Execution Logic
         amount = 0.01 
         
         if prediction == 2.0:
@@ -139,7 +131,6 @@ def run_live_inference(config_path):
 
         print(f"[MARKET] Target: {ticker} | Action: {action} | Conviction: {confidence*100:.1f}%")
         
-        # The Live Trigger
         if os.getenv("LIVE_TRADING") == "TRUE":
             
             # Since Binance doesn't trade traditional stocks (XLF, TQQQ), 

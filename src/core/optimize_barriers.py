@@ -107,7 +107,6 @@ def get_rolling_barriers(price_series: pd.Series, window: int = 60, step: int = 
     Returns:
         pd.DataFrame: A DataFrame containing 'Optimal_PT' and 'Optimal_SL' multipliers for each step.
     """
-    # Create an empty DataFrame to hold the results
     result_df = pd.DataFrame(index=price_series.index, columns=['Optimal_PT', 'Optimal_SL'], dtype=float)
 
     pt_grid = np.arange(0.5, 3.25, 0.25)
@@ -116,19 +115,12 @@ def get_rolling_barriers(price_series: pd.Series, window: int = 60, step: int = 
     n_samples = len(price_series)
 
     for start_idx in range(0, n_samples, step):
-        # We need to look back `window` days from the current step index.
-        # But wait, the prompt says "Every step days ... look back at the last window days".
-        # So at index `i`, we look at `price_series.iloc[i-window:i]`.
         end_idx = start_idx + step
         if start_idx < window:
-            # We can't compute for the first `window` days, so we skip and let it be NaN
             continue
 
-        # The slice of data we use to optimize the barriers for the NEXT `step` days
-        # is the LAST `window` days. So from `start_idx - window` to `start_idx`.
         slice_prices = price_series.iloc[start_idx - window : start_idx]
 
-        # If the slice has enough valid data
         if len(slice_prices.dropna()) >= 15:
             try:
                 phi, sigma = estimate_ou_parameters(slice_prices, window=15)
@@ -139,16 +131,12 @@ def get_rolling_barriers(price_series: pd.Series, window: int = 60, step: int = 
                 paths = generate_synthetic_paths(phi, sigma, num_paths=10000, length=15)
                 best_pt, best_sl, _ = evaluate_barriers(paths, sigma, pt_grid, sl_grid)
 
-                # Assign to the upcoming step chunk
-                # Note: We assign it to `start_idx` up to `end_idx`
                 assign_end = min(end_idx, n_samples)
                 result_df.iloc[start_idx:assign_end, result_df.columns.get_loc('Optimal_PT')] = best_pt
                 result_df.iloc[start_idx:assign_end, result_df.columns.get_loc('Optimal_SL')] = best_sl
             except Exception as e:
-                # If estimation fails (e.g. division by zero in covariance), just skip this window
                 pass
 
-    # Forward fill missing values
     result_df = result_df.ffill()
 
     return result_df

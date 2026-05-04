@@ -247,13 +247,10 @@ def fetch_data(config_path='config/config_phase1.json'):
     6. Applies Fractional Differentiation to the 'Close' price for stationarity.
     7. Splits the data into Train/Test sets with an embargo to prevent leakage.
     """
-    # Security Fix: Prevent Path Traversal
-    # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
 
-    # 2. Resolve path: if simple filename, assume in config/
     if os.path.dirname(config_path) == "":
         target_path = os.path.join(allowed_config_dir, config_path)
     else:
@@ -262,28 +259,23 @@ def fetch_data(config_path='config/config_phase1.json'):
         else:
             target_path = config_path
 
-    # 3. Final Security Validation
     abs_config_path = os.path.realpath(target_path)
     if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
         print(f"[ERROR] Security: Configuration path '{config_path}' is restricted.")
         return
 
-    # Load configuration
     import json
     with open(abs_config_path, 'r') as f:
         config = json.load(f)
 
     import shutil
-    # Wipe previous data to prevent cross-asset pollution
     shutil.rmtree('data/train', ignore_errors=True)
     shutil.rmtree('data/test', ignore_errors=True)
 
-    # Ensure directories exist
     os.makedirs('data/train', exist_ok=True)
     os.makedirs('data/test', exist_ok=True)
     os.makedirs('models/matrices', exist_ok=True)
 
-    # Use configuration with fallbacks
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
     data_window_days = config.get('data_window_days', 730)
 
@@ -309,9 +301,7 @@ def fetch_data(config_path='config/config_phase1.json'):
     for ticker in tickers:
         print(f"Processing {ticker}...")
 
-        # Sanitize ticker to prevent path traversal
         clean_ticker = os.path.basename(ticker)
-        # Allow standard alphanumeric characters, dot, hyphen, underscore, and caret for index tickers
         if not re.match(r'^[\^a-zA-Z0-9_.-]+$', clean_ticker):
              print(f"Skipping invalid ticker: {ticker}")
              continue
@@ -320,13 +310,10 @@ def fetch_data(config_path='config/config_phase1.json'):
 
         df = None
         if ticker in crypto_tickers:
-            # Fetch from ccxt
             symbol_map = {'BTC-USD': 'BTC/USDT', 'ETH-USD': 'ETH/USDT'}
             symbol = symbol_map[ticker]
             print(f"Fetching {data_window_days} days of 1h data for {symbol} from Binance...")
 
-            # 730 days * 24 hours = 17520 bars
-            # ccxt limit per fetch is usually 1000 for binance.
             timeframe = '1h'
             limit = 1000
 
@@ -341,7 +328,6 @@ def fetch_data(config_path='config/config_phase1.json'):
                     if not ohlcv:
                         break
                     all_ohlcv.extend(ohlcv)
-                    # Next fetch starts from the last candle's timestamp + 1 ms to avoid duplicates
                     since = ohlcv[-1][0] + 1
                     time.sleep(exchange.rateLimit / 1000) # Respect rate limit
                 except Exception as e:
@@ -379,12 +365,10 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"No data fetched for {ticker}.")
             continue
 
-        # Ensure 'Close' column exists
         if 'Close' not in df.columns:
             print(f"Error: 'Close' column not found in dataframe for {ticker}. Columns: {df.columns}")
             continue
 
-        # Make index tz-naive and compress to Dollar Bars
         df.index = df.index.tz_localize(None)
         df = construct_dollar_bars(df)
 
@@ -392,7 +376,6 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"Not enough data to construct Dollar Bars for {ticker}.")
             continue
 
-        # Refactored microstructural feature generation to separate function
         print(f"Calculating Microstructural Features for {ticker}...")
         df = calculate_microstructural_features(df)
 
@@ -401,11 +384,9 @@ def fetch_data(config_path='config/config_phase1.json'):
         df['Optimal_PT'] = barriers_df['Optimal_PT'].fillna(2.0)
         df['Optimal_SL'] = barriers_df['Optimal_SL'].fillna(2.0)
 
-        # Apply Fractional Differentiation to Close price
         print(f"Applying Fractional Differentiation to {ticker}...")
         optimal_d = 1.0
         best_ffd = None
-        # Loop d from 0.1 to 0.9 in increments of 0.1
         for d in np.arange(0.1, 1.0, 0.1):
             df_ffd = frac_diff_ffd(df[['Close']], d)
             clean_ffd = df_ffd['Close'].dropna()
@@ -427,18 +408,14 @@ def fetch_data(config_path='config/config_phase1.json'):
 
         tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
         
-        # 1. Drop NaNs FIRST so the split calculations are accurate
         df = df.dropna()
 
-        # 2. Dynamically calculate the split date on healthy data
         split_idx = int(len(df) * TRAIN_SPLIT_RATIO)
         split_date = df.index[split_idx]
 
-        # 3. Create the Train index for PCA
         train_clean_idx = df[df.index < split_date].index
         all_clean_idx = df.index
 
-        # 4. Apply Point-in-Time PCA
         scaler = StandardScaler()
         scaler.fit(df.loc[train_clean_idx, tech_cols])
         scaled_tech = scaler.transform(df.loc[all_clean_idx, tech_cols])
@@ -448,7 +425,6 @@ def fetch_data(config_path='config/config_phase1.json'):
         pca.fit(scaled_train_tech)
         pca_features = pca.transform(scaled_tech)
 
-        # Save matrices for Live Inference
         joblib.dump(scaler, f'models/matrices/scaler_{clean_ticker}.pkl')
         joblib.dump(pca, f'models/matrices/pca_{clean_ticker}.pkl')
 
@@ -457,20 +433,16 @@ def fetch_data(config_path='config/config_phase1.json'):
         df = pd.concat([df, df_pca], axis=1)
         df.drop(columns=tech_cols, inplace=True)
 
-        # 5. Split Data
         try:
             train_df = df[df.index < split_date]
             raw_test_df = df[df.index >= split_date]
-            # Hotfix: Dynamic Train/Test Split applied here
             
-            # IMPLEMENT 60-PERIOD EMBARGO (Drop first 60 rows of Test Set to prevent feature leakage)
             embargo_size = 60 # Maximum feature lookback window.
             if len(raw_test_df) > embargo_size:
                 test_df = raw_test_df.iloc[embargo_size:]
             else:
                 test_df = raw_test_df # Fallback if test set is too small
                 
-            # Save to CSV
             train_file = f'data/train/{clean_ticker}_data.csv'
             train_df.to_csv(train_file)
             print(f"Train data saved to {train_file}")

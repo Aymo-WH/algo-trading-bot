@@ -80,13 +80,8 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         dict: Performance metrics averaged across all evaluated steps.
     """
 
-    # If the model is not the MetaAgent and not XGB, we still need to provide the XGB model
-    # to the environment so it can construct the observation if PPO expects it.
-
-    # Initialize Environment with specific DF
     env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.json")
 
-    # Ensure episode length aligns with our non-overlapping windows
     env.episode_length = len(df) // 5
 
     roi_list = []
@@ -100,7 +95,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     total_round_trip_trades = 0
     max_drawdowns_list = []
 
-    # Iterate over the pre-defined start steps
     for start_step in start_steps:
         obs, _ = env.reset(options={'start_step': start_step})
 
@@ -108,7 +102,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         episode_trades = 0
         episode_fees = 0.0
 
-        # Track portfolio value for daily returns and max drawdown
         prev_portfolio_value = INITIAL_CAPITAL
         peak_portfolio_value = INITIAL_CAPITAL
         max_drawdown = 0.0
@@ -117,47 +110,34 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         truncated = False
 
         while not (terminated or truncated):
-            # Check if model is XGBoost directly
             if hasattr(model, 'predict_proba'):
-                # xgb_signal is obs[0], we don't need predict here if we just output signal,
-                # but if we evaluate XGBoost directly (which live_inference simulates), we output action.
-                # The model variable might be XGBoost, which expects features.
-                # Actually, our env returns [signal, prob, vol, dd]
-                # If we evaluate standalone XGBoost, the action is just the signal
                 xgb_signal = obs[0]
                 action = np.array([np.sign(xgb_signal)])
             else:
-                # Handle MetaAgent or PPO
                 obs_for_prediction = obs
                 if hasattr(model, 'observation_space') and hasattr(model.observation_space, 'shape') and model.observation_space.shape[-1] < obs.shape[-1]:
                     obs_for_prediction = obs[..., :model.observation_space.shape[-1]]
 
                 action, _states = model.predict(obs_for_prediction, deterministic=True)
 
-            # Take step
             next_obs, reward, terminated, truncated, info = env.step(action)
 
-            # Count trades based on fee
             fee = info.get('step_fee', 0.0)
             if fee > 0.01:
                 episode_trades += 1
                 episode_fees += fee
 
-            # Accumulate reward
             episode_profit += reward
 
-            # Track Win Rate
             if info.get('trade_closed', False):
                 total_round_trip_trades += 1
                 if info.get('realized_pnl', 0.0) > 0:
                     total_winning_trades += 1
 
-            # Calculate daily return for this step
             current_portfolio_value = INITIAL_CAPITAL + episode_profit
             daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value if prev_portfolio_value > 0 else 0
             all_daily_returns.append(daily_return)
 
-            # Update max drawdown
             if current_portfolio_value > peak_portfolio_value:
                 peak_portfolio_value = current_portfolio_value
             drawdown = (peak_portfolio_value - current_portfolio_value) / peak_portfolio_value if peak_portfolio_value > 0 else 0.0
@@ -168,13 +148,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
             obs = next_obs
 
-        # Calculate Episode Metrics
         final_value = INITIAL_CAPITAL + episode_profit
         roi = (episode_profit / INITIAL_CAPITAL) * 100
 
-        # Calculate CAGR for this episode
-        # Start date is at start_step
-        # End date is the current step (end of episode)
         ep_start_date = df['Date'].iloc[start_step]
         safe_end_step = min(env.current_step, len(df) - 1)
         ep_end_date = df['Date'].iloc[safe_end_step]
@@ -187,7 +163,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         fees_list.append(episode_fees)
         max_drawdowns_list.append(max_drawdown)
 
-    # Average Metrics
     avg_roi = np.mean(roi_list)
     avg_cagr = np.mean(cagr_list)
     total_net_profit = np.sum(profit_list)
@@ -205,7 +180,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         "Fees": total_fees,
         "Win Rate (%)": win_rate,
         "Max Drawdown (%)": avg_max_drawdown,
-        "Start Date": df['Date'].iloc[start_steps[0]], # Representative
+        "Start Date": df['Date'].iloc[start_steps[0]],
         "End Date": df['Date'].iloc[-1],
         "daily_returns": all_daily_returns
     }
@@ -223,7 +198,6 @@ def evaluate_model(dqn_model, ppo_model, ticker):
         ppo_model (stable_baselines3.PPO): Trained sizing agent.
         ticker (str): The stock ticker to evaluate.
     """
-    # Load specific dataframe
     data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Data for {ticker} not found in {DATA_DIR}")
@@ -232,13 +206,11 @@ def evaluate_model(dqn_model, ppo_model, ticker):
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
 
-    # Evaluate across 5 non-overlapping fixed windows
     step_size = len(df) // 5
     steps = [i * step_size for i in range(5)]
 
     meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
 
-    # Run Evaluation
     metrics = evaluate_model_on_stock(meta_agent, df, ticker, False, steps)
 
     return None, None, metrics["daily_returns"]
@@ -310,7 +282,6 @@ def main(active_tickers=None):
     """
     print("Starting Evaluation...")
 
-    # Load Primary Target Model directly instead of searching all models
     xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
     ppo_path = os.path.join(MODELS_DIR, "ppo_trading_bot.zip")
 
@@ -318,7 +289,6 @@ def main(active_tickers=None):
         print("Required models (xgb_trading_bot.json, ppo_trading_bot.zip) not found in models/")
         return
 
-    # Find Data
     if active_tickers:
         data_files = [os.path.join(DATA_DIR, f"{ticker}_data.csv") for ticker in active_tickers]
         data_files = [f for f in data_files if os.path.exists(f)]
@@ -332,13 +302,11 @@ def main(active_tickers=None):
     results = []
     sp500_cache = {}
 
-    # Pre-generate start steps for each stock to ensure fair comparison across models
     stock_start_steps = {}
     stock_dfs = {}
     stock_sp500_benchmarks = {}
     stock_bh_benchmarks = {}
 
-    # Store all dates to fetch global S&P 500 data once
     all_start_dates = []
     all_end_dates = []
     unique_date_pairs = set()
@@ -351,12 +319,10 @@ def main(active_tickers=None):
 
         stock_dfs[stock_name] = df
 
-        # Evaluate across 5 non-overlapping fixed windows
         step_size = len(df) // 5
         steps = [i * step_size for i in range(5)]
         stock_start_steps[stock_name] = steps
 
-        # Collect dates for S&P 500 optimization
         for s in steps:
             s_date = df['Date'].iloc[s]
             # End index is the end of the window
@@ -366,7 +332,6 @@ def main(active_tickers=None):
             all_end_dates.append(e_date)
             unique_date_pairs.add((s_date, e_date))
 
-    # Fetch global S&P 500 data if dates are available
     global_sp500_df = None
     if all_start_dates:
         global_min_date = min(all_start_dates)
@@ -402,13 +367,11 @@ def main(active_tickers=None):
 
         global_sp500_df = _GSPC_CACHE
 
-    # Pre-calculate unique S&P 500 benchmark pairs to avoid redundant slicing
     if global_sp500_df is not None:
         for s_date, e_date in unique_date_pairs:
             if (s_date, e_date) not in sp500_cache:
                 sp500_cache[(s_date, e_date)] = get_benchmark_sp500(s_date, e_date, sp500_df=global_sp500_df)
 
-    # Calculate Benchmarks using optimized or cached approach
     for stock_name, steps in stock_start_steps.items():
         df = stock_dfs[stock_name]
         step_size = len(df) // 5
@@ -428,7 +391,6 @@ def main(active_tickers=None):
 
         stock_sp500_benchmarks[stock_name] = (np.mean(sp_rois), np.mean(sp_cagrs))
 
-        # Also pre-calculate Buy & Hold for the stock
         bh_rois = []
         for s in steps:
             start_price = df['Close'].iloc[s]
@@ -439,11 +401,9 @@ def main(active_tickers=None):
         stock_bh_benchmarks[stock_name] = np.mean(bh_rois)
 
 
-    # Load Models
     models_to_eval = {}
     try:
         ppo_model = load_agent(ppo_path)
-        # We explicitly load the PPO model as the evaluation target
         models_to_eval["Meta-Architecture (PPO + XGB)"] = ppo_model
     except Exception as e:
         print(f"Failed to load PPO model: {e}")
@@ -455,13 +415,10 @@ def main(active_tickers=None):
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
 
-            # All models now use continuous env in phase 2 setup
             is_discrete = False
 
-            # Run Evaluation
             metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
 
-            # Benchmarks (Buy & Hold) over the fixed non-overlapping windows
             bh_roi = stock_bh_benchmarks[stock_name]
 
             sp500_roi, sp500_cagr = stock_sp500_benchmarks[stock_name]
@@ -480,23 +437,19 @@ def main(active_tickers=None):
                 "vs SP500 ROI (%)": round(metrics["ROI"] - sp500_roi, 2)
             })
     
-    # Create DataFrame
     results_df = pd.DataFrame(results)
 
     if results_df.empty:
         print("No results generated.")
         return
 
-    # Sort by Agent and Stock
     results_df = results_df.sort_values(by=["Agent", "Stock"])
 
     print("\n" + "="*130)
     print("STRATEGIC EVALUATION MATRIX")
     print("="*130)
-    # Reorder columns
     cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Trades", "Win Rate (%)", "Max Drawdown (%)", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
 
-    # Print formatted string
     print(results_df[cols].to_string(index=False))
     print("="*120)
 
