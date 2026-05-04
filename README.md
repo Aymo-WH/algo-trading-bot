@@ -1,51 +1,27 @@
 # The Gordian Project: Dual-Engine Algorithmic Trading
 
-An institutional-grade trading framework utilizing advanced microstructure analysis and supervised learning for live market execution. The Gordian Project bridges the gap between high-fidelity research (Cloud) and low-latency execution (Edge).
+This repository implements an institutional-grade algorithmic trading pipeline dubbed "The Gordian Project", deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.  The V2 architecture evolves the project from a research sandbox into a bifurcated production system: a high-compute Research Node (Cloud) and a low-latency Execution Node (Edge).  
 
-## 🧠 Core Quantitative Philosophy
+---
+
+## 🧠 Core Quantitative Features
 The project maintains its foundational commitment to Information-Driven Finance:
-- **Information-Driven Sampling:** Utilizes **Dollar Bars** to sample the market based on dollar volume exchanged, restoring statistical normality to price series.
-- **Microstructural Feature Set:** Computes **VPIN** (Volume-Synchronized Probability of Informed Trading) and **SADF** (Supremum Augmented Dickey-Fuller) to detect toxic order flow and speculative bubbles[cite: 15].
-- **Memory Preservation:** Applies **Fractional Differentiation (FFD)** to price series, passing the ADF stationarity test while preserving the memory required for predictive modeling[cite: 15].
-
-## 🚀 System Architecture
-- **Research Node (Google Colab):** Used for 730-day historical data ingestion, FFD calibration, and XGBoost training.
-- **Execution Node (Local Edge):** Lightweight node for live 60-day data fetching, PCA transformation, and programmatic execution via Binance API[cite: 13, 17].
-
-## 🛠️ New Production Features
-- **Bifurcated Data Ingestion:** Traditional equities via `yfinance` and high-fidelity crypto volume via `CCXT/Binance`.
-- **Dimensionality Reduction:** Point-in-Time **PCA** to decorrelate 9 primary microstructural features into 4 principal components.
-- **Execution Engine:** Full CCXT integration for automated market orders on the Binance Testnet[cite: 13].
-
-## 📦 Future Roadmap
-- **Phase 1 (Current):** Stabilize XGBoost Signal Brain on high-volatility assets.
-- **Phase 2:** Re-introduce **PPO (Reinforcement Learning)** as a Meta-Agent for dynamic position sizing and automated risk-parity management.
-
----
-[Placeholder]
-
-This repository implements an algorithmic trading pipeline dubbed **"The Gordian Project"**, deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.
-
-Traditional algorithmic trading relies on chronological time bars, but time is a poor metric for market activity. This engine discards the clock, instead sampling the market based on capital exchange, learning the underlying physics of different asset classes, and executing mathematically sized trades.
-
-**Note:** UI development (Gradio/Streamlit) has been intentionally abandoned. This project strictly focuses on backend perfection, algorithmic integrity, and live terminal execution.
-
----
-
-## 🧠 Core Engineering Features
-
-*   **Information-Driven Dollar Bars:** Neutralizes market noise and heteroscedasticity by sampling bars only when a dynamic threshold of fiat currency is exchanged.
-*   **Fractional Differentiation (FFD) & Point-in-Time PCA:** Achieves stationarity on price series while preserving memory, and extracts orthogonal features dynamically without look-ahead bias.
-*   **Dual-Agent Meta-Labeling (Dual-Brain System):** Strictly separates "Direction" from "Conviction."
-    *   A primary **XGBoost** model utilizes the Triple-Barrier Method to generate directional signals.
-    *   A secondary **Proximal Policy Optimization (PPO)** agent acts as the risk manager, continuously sizing the bet based on statistical confidence (converting PPO output to a z-score and applying a Normal CDF).
-*   **Optimal Trading Rule (OTR) & Dynamic Rolling O-U Barriers:** Execution barrier optimization (Profit-Taking and Stop-Loss limits) is handled offline by estimating Ornstein-Uhlenbeck (O-U) parameters to prevent execution-level overfitting.
-*   **Probability of Backtest Overfitting (PBO):** Calculated via Combinatorially Symmetric Cross-Validation (CSCV) to strictly validate out-of-sample performance and penalize overfitting.
-*   **Multi-Asset Modular Configuration:** Dynamic configuration handling for multiple asset classes via isolated files (e.g., `config/config_crypto.json`, `config/config_macro.json`).
+- **Information-Driven Dollar Bars:** Discards chronological time to neutralize market noise and heteroscedasticity. Sampling occurs only when a dynamic threshold of fiat currency is exchanged, restoring statistical normality to price series.
+- **Fractional Differentiation (FFD):** Achieves stationarity while preserving maximum memory. The engine iteratively solves for an optimal $d$-value to ensure the series passes ADF tests without destroying the predictive signals found in historical price levels.
+- **Point-in-Time PCA:** Prevents collinearity by dynamically extracting orthogonal features from the microstructural feature set without introducing look-ahead bias.
+- **Microstructural Dynamics:** Captures informed trading probability and toxic order flow using **VPIN** (Volume-Synchronized Probability of Informed Trading), **SADF** (Supremum Augmented Dickey-Fuller) for bubble detection, and **Amihud Illiquidity** metrics.
+- **Dual-Agent Meta-Labeling:** Strictly separates "Direction" from "Conviction."
+   - **Primary Brain (XGBoost):** Utilizes the Triple-Barrier Method to generate directional signals (LONG/SHORT/HOLD).
+   - **Secondary Agent (PPO):** Acts as the risk manager, dynamically sizing the bet based on statistical confidence.  
 
 ---
 
 ## 🏗️ Architecture V2 Upgrades
+
+*   **Bifurcated Data Engine:** Implements a dual-pathway ingestion system. Traditional equities are sourced via yfinance, while high-volatility digital assets are ingested via CCXT/Binance to ensure volume fidelity for Dollar Bar construction.
+*   **Edge-Inference Protocol:** Optimizes the live execution loop for local hardware. The execution node fetches real-time 60-day windows and applies pre-fitted Scaler and PCA matrices to bypass environment-based "Shape Mismatches".
+*   **Data Leakage Prevention:** Enforces a strict 60-Period Train/Test Embargo to eliminate predictive look-ahead bias and ensure the validity of out-of-sample performance.
+*   **Automated Execution Loop:** Fully integrated with the Binance Testnet API for real-time market order execution with automated receipt ID tracking.
 
 *   **Microstructural Features:** Added VPIN, SADF, and Amihud Illiquidity to better capture market microstructure dynamics and informed trading probability.
 *   **Safe RL Reward Function:** Implemented Turnover, Variance, and Drawdown penalties to strictly penalize excessive trading, volatility, and portfolio drawdown.
@@ -61,11 +37,13 @@ Traditional algorithmic trading relies on chronological time bars, but time is a
 
 The project follows a strict modular architecture, isolating core engine logic from laboratory tools.
 
-*   **`data_factory.py`**: The data pipeline. Fetches a rolling 730-day window of intraday data, compresses it into Information-Driven Dollar Bars, applies point-in-time PCA and FFD, and exports fitted mathematical matrices (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
+*   **`data_factory.py`**: The pipeline engine. Fetches a rolling 730-day window, constructs Dollar Bars, calibrates FFD, and exports fitted mathematical matrices to models/matrices/.
+*   (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
 *   **`core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
 *   **`core/meta_agent.py`**: Combines the primary XGBoost model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
 *   **`core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
 *   **`core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
+*   **`src/live_inference.py`**: The core execution engine. A lean, production-ready script that loads pre-trained brains and asset-specific matrices for real-time market action.
 
 ---
 
@@ -78,29 +56,32 @@ cd the-gordian-project
 pip install -r requirements.txt
 ```
 
-### 2. Build the Data Factory (The Fuel)
+### 2. Local Configuration: 
+Ensure your .env file contains your BINANCE_API_KEY, BINANCE_SECRET, and LIVE_TRADING="TRUE".
+
+### 3. Build the Data Factory (The Fuel)
 Specify your asset class (e.g., Crypto, Macro ETFs) using the dynamic config argument. This process generates datasets and fitted PCA/Scaler matrices.
 ```bash
 python data_factory.py --config config/config_phase1.json
 ```
 
-### 3. Agent Training (`train_agent.py`)
+### 4. Agent Training (`train_agent.py`)
 Provides core utilities (`train_xgb`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
 
-### 4. Headless Optimization (`research/optimize_agents.py`)
+### 5. Headless Optimization (`research/optimize_agents.py`)
 Run headless hyperparameter optimization using Optuna. The engine loops through the specified basket of active tickers, tracking out-of-sample returns to build a True PBO matrix.
 ```bash
 python research/optimize_agents.py --config config/config_phase1.json --trials 50 --timesteps 50000
 ```
 
-### 5. Out-of-Sample Evaluation & Telemetry (`evaluate_agents.py` & `telemetry.py`)
+### 6. Out-of-Sample Evaluation & Telemetry (`evaluate_agents.py` & `telemetry.py`)
 Evaluate models strictly on fixed chronological blocks to ensure validity. Analyze decoupled agent telemetry (Confusion Matrix, Recall, Precision, Log-Loss) and execution latency metrics.
 ```bash
 python evaluate_agents.py --config config/config_phase1.json
 python telemetry.py
 ```
 
-### 6. Live Inference Engine (`live_inference.py`)
+### 7. Live Inference Engine (`live_inference.py`)
 The core terminal execution engine. Loads Stable-Baselines3 agents alongside ticker-specific state matrices for live, real-time execution simulation.
 ```bash
 python live_inference.py --config config/config_phase1.json
