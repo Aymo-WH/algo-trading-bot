@@ -410,7 +410,6 @@ def main(active_tickers=None):
         return
 
     for model_name, model in models_to_eval.items():
-        # print(f"Evaluating Model: {model_name}")
 
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
