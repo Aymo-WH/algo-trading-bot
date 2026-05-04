@@ -302,7 +302,7 @@ def fetch_data(config_path='config/config_phase1.json'):
 
     exchange = None
     if crypto_tickers:
-        exchange = ccxt.binance({
+        exchange = ccxt.binanceus({
             'enableRateLimit': True,
         })
 
