@@ -6,6 +6,8 @@ from sklearn.preprocessing import StandardScaler
 import os
 import re
 import joblib
+import ccxt
+import time
 from statsmodels.tsa.stattools import adfuller
 from core.optimize_barriers import get_rolling_barriers
 from numba import njit, prange
@@ -285,13 +287,24 @@ def fetch_data(config_path='config/config_phase1.json'):
     tickers = config.get('tickers', ['NVDA', 'AAPL', 'MSFT', 'AMD', 'INTC'])
     data_window_days = config.get('data_window_days', 730)
 
-    print(f"Fetching intraday data for {tickers}...")
-    try:
-        # Fetch data for all tickers at once
-        data = yf.download(tickers, period=f"{data_window_days}d", interval='1h', group_by='ticker')
-    except Exception as e:
-        print(f"Error fetching data: {e}")
-        return
+    crypto_tickers = [t for t in tickers if t in ['BTC-USD', 'ETH-USD']]
+    yfinance_tickers = [t for t in tickers if t not in crypto_tickers]
+
+    data = None
+    if yfinance_tickers:
+        print(f"Fetching intraday data from yfinance for {yfinance_tickers}...")
+        try:
+            # Fetch data for all yfinance tickers at once
+            data = yf.download(yfinance_tickers, period=f"{data_window_days}d", interval='1h', group_by='ticker')
+        except Exception as e:
+            print(f"Error fetching data from yfinance: {e}")
+            data = None
+
+    exchange = None
+    if crypto_tickers:
+        exchange = ccxt.binanceus({
+            'enableRateLimit': True,
+        })
 
     for ticker in tickers:
         print(f"Processing {ticker}...")
@@ -304,30 +317,65 @@ def fetch_data(config_path='config/config_phase1.json'):
              continue
         if clean_ticker != ticker:
              print(f"Warning: Ticker '{ticker}' sanitized to '{clean_ticker}'")
-             # Proceed with sanitized ticker for file saving purposes, 
-             # but we still need to access data using the original key if applicable.
-        
-        # However, yfinance download uses the original ticker list. 
-        # So we should probably use the original ticker to access data, 
-        # but the sanitized ticker for filenames.
 
-        try:
-            # Extract dataframe for specific ticker
-            if isinstance(data.columns, pd.MultiIndex):
+        df = None
+        if ticker in crypto_tickers:
+            # Fetch from ccxt
+            symbol_map = {'BTC-USD': 'BTC/USDT', 'ETH-USD': 'ETH/USDT'}
+            symbol = symbol_map[ticker]
+            print(f"Fetching {data_window_days} days of 1h data for {symbol} from Binance...")
+
+            # 730 days * 24 hours = 17520 bars
+            # ccxt limit per fetch is usually 1000 for binance.
+            timeframe = '1h'
+            limit = 1000
+
+            now = exchange.milliseconds()
+            since = now - (data_window_days * 24 * 60 * 60 * 1000)
+
+            all_ohlcv = []
+
+            while since < now:
                 try:
-                    df = data[ticker].copy()
-                except KeyError:
-                    print(f"No data found for {ticker} in bulk download.")
-                    continue
-            else:
-                # Fallback if only one ticker or flat structure returned
-                df = data.copy()
+                    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+                    if not ohlcv:
+                        break
+                    all_ohlcv.extend(ohlcv)
+                    # Next fetch starts from the last candle's timestamp + 1 ms to avoid duplicates
+                    since = ohlcv[-1][0] + 1
+                    time.sleep(exchange.rateLimit / 1000) # Respect rate limit
+                except Exception as e:
+                    print(f"Error fetching {symbol} from Binance: {e}")
+                    break
 
-        except Exception as e:
-            print(f"Error extracting data for {ticker}: {e}")
-            continue
+            if not all_ohlcv:
+                print(f"No data fetched for {ticker} from Binance.")
+                continue
 
-        if df.empty:
+            df = pd.DataFrame(all_ohlcv, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+            df['Date'] = pd.to_datetime(df['Date'], unit='ms')
+            df.set_index('Date', inplace=True)
+
+        else:
+            if data is None:
+                continue
+            try:
+                # Extract dataframe for specific ticker
+                if isinstance(data.columns, pd.MultiIndex):
+                    try:
+                        df = data[ticker].copy()
+                    except KeyError:
+                        print(f"No data found for {ticker} in bulk download.")
+                        continue
+                else:
+                    # Fallback if only one ticker or flat structure returned
+                    df = data.copy()
+
+            except Exception as e:
+                print(f"Error extracting data for {ticker}: {e}")
+                continue
+
+        if df is None or df.empty:
             print(f"No data fetched for {ticker}.")
             continue
 

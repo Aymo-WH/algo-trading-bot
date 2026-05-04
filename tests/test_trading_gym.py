@@ -34,9 +34,9 @@ class TestTradingGym(unittest.TestCase):
     def test_observation_space_shape(self):
         env = TradingEnv(data_dir=self.test_dir)
 
-        # Verify that observation space is a Box and has shape == (4,)
+        # Verify that observation space is a Box and has shape == (3,)
         self.assertIsInstance(env.observation_space, spaces.Box)
-        self.assertEqual(env.observation_space.shape, (4,), "Observation space shape must be exactly (4,) per V2 specs.")
+        self.assertEqual(env.observation_space.shape, (3,), "Observation space shape must be exactly (3,) per V2 specs.")
 
 if __name__ == '__main__':
     unittest.main()

@@ -132,13 +132,13 @@ class TradingEnv(gym.Env):
             # Action space outputs continuous bet size [0.0, 1.0]
             self.action_space = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         
-        # Observation space is now a 1D Box with 4 features:
-        # [xgb_signal, xgb_prob, rolling_volatility, portfolio_drawdown]
+        # Observation space is now a 1D Box with 3 features:
+        # [xgb_signal, xgb_prob, unrealized_pnl]
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
         )
 
-        self.obs_buffer = np.empty((4,), dtype=np.float32)
+        self.obs_buffer = np.empty((3,), dtype=np.float32)
         self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
@@ -198,7 +198,7 @@ class TradingEnv(gym.Env):
         self.total_fees = 0.0
 
         # Populate initial 1D buffer for the current step
-        self._get_single_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
+        self._next_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
 
         observation = self.obs_buffer
         info = {}
@@ -321,8 +321,8 @@ class TradingEnv(gym.Env):
 
         base_gross_profit = daily_return * 100
         bet_size = abs(act)
-        turnover_penalty_coef = 0.0005
-        variance_penalty_coef = (current_atr / current_price) * 50 if current_price > 0 else 0.0
+        turnover_penalty_coef = self.transaction_fee_percent * 100
+        variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
         cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
 
         reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
@@ -337,25 +337,22 @@ class TradingEnv(gym.Env):
             terminated = True
                 
         # Update the 1D buffer for the new step
-        self._get_single_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
+        self._next_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
     
         return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
 
-    def _get_single_observation(self, step_idx, cash, shares_held, target_array):
+    def _next_observation(self, step_idx, cash, shares_held, target_array):
         # Clamp step_idx
         step_idx = min(step_idx, len(self.obs_matrix) - 1)
-
-        # 1. Calculate Volatility
         current_price = self._prices[step_idx]
-        current_atr = self._atr[step_idx]
-        volatility = (current_atr / current_price) if current_price > 0 else 0.0
 
-        # 2. Calculate Drawdown
-        net_worth = cash + (shares_held * current_price)
-        peak = max(self.peak_net_worth, net_worth)
-        drawdown = (peak - net_worth) / peak if peak > 0 else 0.0
+        # 1. Calculate Unrealized PnL%
+        if shares_held > 0 and self.entry_price > 0:
+            unrealized_pnl = ((current_price - self.entry_price) / self.entry_price) * 100.0
+        else:
+            unrealized_pnl = 0.0
 
-        # 3. Generate XGBoost Signal & Probability
+        # 2. Generate XGBoost Signal & Probability
         if self.xgb_model is not None:
             # Reshape the 4 PCA features for the XGBoost predict method
             pca_features = self.obs_matrix[step_idx].reshape(1, -1)
@@ -368,11 +365,10 @@ class TradingEnv(gym.Env):
             xgb_signal = 0.0
             xgb_prob = 0.0
 
-        # 4. Populate the target array
+        # 3. Populate the target array
         target_array[0] = xgb_signal
         target_array[1] = xgb_prob
-        target_array[2] = volatility
-        target_array[3] = drawdown
+        target_array[2] = unrealized_pnl
 
     def render(self, mode='human'):
         """
