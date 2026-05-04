@@ -1,4 +1,28 @@
-# The Gordian Project (Version 9.0 Cloud-Ready)
+# The Gordian Project: Dual-Engine Algorithmic Trading
+
+An institutional-grade trading framework utilizing advanced microstructure analysis and supervised learning for live market execution. The Gordian Project bridges the gap between high-fidelity research (Cloud) and low-latency execution (Edge).
+
+## 🧠 Core Quantitative Philosophy
+The project maintains its foundational commitment to Information-Driven Finance:
+- **Information-Driven Sampling:** Utilizes **Dollar Bars** to sample the market based on dollar volume exchanged, restoring statistical normality to price series.
+- **Microstructural Feature Set:** Computes **VPIN** (Volume-Synchronized Probability of Informed Trading) and **SADF** (Supremum Augmented Dickey-Fuller) to detect toxic order flow and speculative bubbles[cite: 15].
+- **Memory Preservation:** Applies **Fractional Differentiation (FFD)** to price series, passing the ADF stationarity test while preserving the memory required for predictive modeling[cite: 15].
+
+## 🚀 System Architecture
+- **Research Node (Google Colab):** Used for 730-day historical data ingestion, FFD calibration, and XGBoost training.
+- **Execution Node (Local Edge):** Lightweight node for live 60-day data fetching, PCA transformation, and programmatic execution via Binance API[cite: 13, 17].
+
+## 🛠️ New Production Features
+- **Bifurcated Data Ingestion:** Traditional equities via `yfinance` and high-fidelity crypto volume via `CCXT/Binance`.
+- **Dimensionality Reduction:** Point-in-Time **PCA** to decorrelate 9 primary microstructural features into 4 principal components.
+- **Execution Engine:** Full CCXT integration for automated market orders on the Binance Testnet[cite: 13].
+
+## 📦 Future Roadmap
+- **Phase 1 (Current):** Stabilize XGBoost Signal Brain on high-volatility assets.
+- **Phase 2:** Re-introduce **PPO (Reinforcement Learning)** as a Meta-Agent for dynamic position sizing and automated risk-parity management.
+
+---
+[Placeholder]
 
 This repository implements an algorithmic trading pipeline dubbed **"The Gordian Project"**, deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.
 
