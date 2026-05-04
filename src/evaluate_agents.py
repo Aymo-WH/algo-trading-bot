@@ -502,12 +502,34 @@ def main(active_tickers=None):
 
 if __name__ == "__main__":
     import argparse
+    import json
+    import os
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
 
-    import json
-    with open(args.config, 'r') as f:
+    # Security Fix: Prevent Path Traversal
+    # 1. Resolve project root and allowed config directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
+
+    # 2. Resolve path: if simple filename, assume in config/
+    if os.path.dirname(args.config) == "":
+        target_path = os.path.join(allowed_config_dir, args.config)
+    else:
+        if not os.path.isabs(args.config):
+            target_path = os.path.join(project_root, args.config)
+        else:
+            target_path = args.config
+
+    # 3. Final Security Validation
+    abs_config_path = os.path.realpath(target_path)
+    if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
+        print(f"[ERROR] Security: Configuration path '{args.config}' is restricted.")
+        exit(1)
+
+    with open(abs_config_path, 'r') as f:
         config = json.load(f)
         active_tickers = config.get("tickers", [])
 

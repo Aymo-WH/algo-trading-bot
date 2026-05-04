@@ -81,11 +81,13 @@ def generate_synthetic_paths(phi: float, sigma: float, num_paths: int = 100000, 
 
     # Initialize all paths with an entry price of 0 (which is already 0 from np.zeros)
 
+    # Pre-generate noise for all steps
+    noise = np.random.normal(0, 1, size=(length, num_paths))
+
     # Iteratively generate the next step
     for t in range(1, length):
-        noise = np.random.normal(0, 1, size=num_paths)
         # p_t = (1 - phi) * 0 + phi * p_{t-1} + sigma * N(0, 1)
-        paths[:, t] = phi * paths[:, t-1] + sigma * noise
+        paths[:, t] = phi * paths[:, t-1] + sigma * noise[t]
 
     return paths
 

@@ -13,7 +13,6 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import evaluate_agents
 
 with gr.Blocks(theme=gr.themes.Monochrome()) as dashboard:
     gr.Markdown("# 🤖 The Gordian Project Dashboard - Portfolio Oversight")
