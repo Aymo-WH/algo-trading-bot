@@ -96,6 +96,10 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     fees_list = []
     all_daily_returns = []
 
+    total_winning_trades = 0
+    total_round_trip_trades = 0
+    max_drawdowns_list = []
+
     # Iterate over the pre-defined start steps
     for start_step in start_steps:
         obs, _ = env.reset(options={'start_step': start_step})
@@ -104,8 +108,10 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         episode_trades = 0
         episode_fees = 0.0
 
-        # Track portfolio value for daily returns
+        # Track portfolio value for daily returns and max drawdown
         prev_portfolio_value = INITIAL_CAPITAL
+        peak_portfolio_value = INITIAL_CAPITAL
+        max_drawdown = 0.0
 
         terminated = False
         truncated = False
@@ -140,10 +146,24 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
             # Accumulate reward
             episode_profit += reward
 
+            # Track Win Rate
+            if info.get('trade_closed', False):
+                total_round_trip_trades += 1
+                if info.get('realized_pnl', 0.0) > 0:
+                    total_winning_trades += 1
+
             # Calculate daily return for this step
             current_portfolio_value = INITIAL_CAPITAL + episode_profit
             daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value if prev_portfolio_value > 0 else 0
             all_daily_returns.append(daily_return)
+
+            # Update max drawdown
+            if current_portfolio_value > peak_portfolio_value:
+                peak_portfolio_value = current_portfolio_value
+            drawdown = (peak_portfolio_value - current_portfolio_value) / peak_portfolio_value if peak_portfolio_value > 0 else 0.0
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+
             prev_portfolio_value = current_portfolio_value
 
             obs = next_obs
@@ -165,6 +185,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         profit_list.append(episode_profit)
         trades_list.append(episode_trades)
         fees_list.append(episode_fees)
+        max_drawdowns_list.append(max_drawdown)
 
     # Average Metrics
     avg_roi = np.mean(roi_list)
@@ -173,12 +194,17 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     total_trades = np.sum(trades_list)
     total_fees = np.sum(fees_list)
 
+    win_rate = (total_winning_trades / total_round_trip_trades) * 100 if total_round_trip_trades > 0 else 0.0
+    avg_max_drawdown = np.mean(max_drawdowns_list) * 100
+
     return {
         "Net Profit": total_net_profit,
         "ROI": avg_roi,
         "CAGR": avg_cagr,
         "Trades": total_trades,
         "Fees": total_fees,
+        "Win Rate (%)": win_rate,
+        "Max Drawdown (%)": avg_max_drawdown,
         "Start Date": df['Date'].iloc[start_steps[0]], # Representative
         "End Date": df['Date'].iloc[-1],
         "daily_returns": all_daily_returns
@@ -367,10 +393,12 @@ def main(active_tickers=None):
 
                 # Efficient accumulation
                 _GSPC_CACHE_PARTS.append(new_data)
-                _consolidate_gspc_cache()
 
             except Exception as e:
                 print(f"Error pre-fetching S&P 500 data: {e}")
+
+        # Consolidate after potential appending to avoid repeated pd.concat in loops
+        _consolidate_gspc_cache()
 
         global_sp500_df = _GSPC_CACHE
 
@@ -422,7 +450,6 @@ def main(active_tickers=None):
         return
 
     for model_name, model in models_to_eval.items():
-        # print(f"Evaluating Model: {model_name}")
 
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
@@ -442,6 +469,8 @@ def main(active_tickers=None):
                 "Agent": model_name,
                 "Stock": stock_name,
                 "Trades": metrics["Trades"],
+                "Win Rate (%)": round(metrics["Win Rate (%)"], 2),
+                "Max Drawdown (%)": round(metrics["Max Drawdown (%)"], 2),
                 "Fees ($)": round(metrics["Fees"], 2),
                 "Net Profit ($)": round(metrics["Net Profit"], 2),
                 "ROI (%)": round(metrics["ROI"], 2),
@@ -460,11 +489,11 @@ def main(active_tickers=None):
     # Sort by Agent and Stock
     results_df = results_df.sort_values(by=["Agent", "Stock"])
 
-    print("\n" + "="*120)
+    print("\n" + "="*130)
     print("STRATEGIC EVALUATION MATRIX")
-    print("="*120)
+    print("="*130)
     # Reorder columns
-    cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Trades", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
+    cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Trades", "Win Rate (%)", "Max Drawdown (%)", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
 
     # Print formatted string
     print(results_df[cols].to_string(index=False))
@@ -472,12 +501,33 @@ def main(active_tickers=None):
 
 if __name__ == "__main__":
     import argparse
+    import json
+    import os
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
 
-    import json
-    with open(args.config, 'r') as f:
+    # 1. Resolve project root and allowed config directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
+
+    # 2. Resolve path: if simple filename, assume in config/
+    if os.path.dirname(args.config) == "":
+        target_path = os.path.join(allowed_config_dir, args.config)
+    else:
+        if not os.path.isabs(args.config):
+            target_path = os.path.join(project_root, args.config)
+        else:
+            target_path = args.config
+
+    # 3. Final Security Validation
+    abs_config_path = os.path.realpath(target_path)
+    if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
+        print(f"[ERROR] Security: Configuration path '{args.config}' is restricted.")
+        exit(1)
+
+    with open(abs_config_path, 'r') as f:
         config = json.load(f)
         active_tickers = config.get("tickers", [])
 

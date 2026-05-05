@@ -247,7 +247,6 @@ def fetch_data(config_path='config/config_phase1.json'):
     6. Applies Fractional Differentiation to the 'Close' price for stationarity.
     7. Splits the data into Train/Test sets with an embargo to prevent leakage.
     """
-    # Security Fix: Prevent Path Traversal
     # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
@@ -461,9 +460,7 @@ def fetch_data(config_path='config/config_phase1.json'):
         try:
             train_df = df[df.index < split_date]
             raw_test_df = df[df.index >= split_date]
-            # Hotfix: Dynamic Train/Test Split applied here
             
-            # IMPLEMENT 60-PERIOD EMBARGO (Drop first 60 rows of Test Set to prevent feature leakage)
             embargo_size = 60 # Maximum feature lookback window.
             if len(raw_test_df) > embargo_size:
                 test_df = raw_test_df.iloc[embargo_size:]

@@ -270,6 +270,8 @@ class TradingEnv(gym.Env):
             act = xgb_signal * bet_size
             
         step_fee = 0.0
+        trade_closed = False
+        realized_pnl = 0.0
             
         # Calculate Rebalancing
         if act > 0:
@@ -298,6 +300,15 @@ class TradingEnv(gym.Env):
             self.shares_held -= shares_sold
 
             if self.shares_held <= 1e-6: # Account for float precision
+                # Trade fully closed
+                if self.entry_price > 0:
+                    trade_closed = True
+                    # Calculate realized PnL including fees, as requested by the user.
+                    total_gross_return = ((current_price - self.entry_price) / self.entry_price) * 100.0
+                    # Rough approximation of entry and exit fee impact on PnL
+                    total_fee_impact = (self.transaction_fee_percent * 2) * 100.0
+                    realized_pnl = total_gross_return - total_fee_impact
+
                 self.shares_held = 0.0
                 self.entry_price = 0.0
                 self.entry_step = 0
@@ -321,11 +332,16 @@ class TradingEnv(gym.Env):
 
         base_gross_profit = daily_return * 100
         bet_size = abs(act)
-        turnover_penalty_coef = self.transaction_fee_percent * 100
+        turnover_penalty_coef = self.transaction_fee_percent * 20
         variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
-        cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
+        cvar_penalty = drawdown * 50 if drawdown > 0.05 else 0.0
 
         reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
+
+        # Execution Bonus for profitable directional bets
+        directional_pnl = base_gross_profit * bet_size
+        if directional_pnl > 0:
+            reward += directional_pnl * 0.5
     
         # Terminate if we reach the end of the dataframe
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
@@ -339,7 +355,7 @@ class TradingEnv(gym.Env):
         # Update the 1D buffer for the new step
         self._next_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
     
-        return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
+        return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee, 'trade_closed': trade_closed, 'realized_pnl': realized_pnl}
 
     def _next_observation(self, step_idx, cash, shares_held, target_array):
         # Clamp step_idx
