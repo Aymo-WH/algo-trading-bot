@@ -104,7 +104,7 @@ def run_live_inference(config_path):
             
         raw_features = latest_data[feature_cols].values
 
-        # --- THE MATRIX FIX (Using your new matrices/ folder) ---
+        # --- Load Matrices ---
         clean_ticker = os.path.basename(ticker)
         scaler_path = f"models/matrices/scaler_{clean_ticker}.pkl"
         pca_path = f"models/matrices/pca_{clean_ticker}.pkl"

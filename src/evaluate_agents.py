@@ -450,7 +450,6 @@ def main(active_tickers=None):
         return
 
     for model_name, model in models_to_eval.items():
-        # print(f"Evaluating Model: {model_name}")
 
         for stock_name, df in stock_dfs.items():
             start_steps = stock_start_steps[stock_name]
@@ -508,7 +507,6 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
 
-    # Security Fix: Prevent Path Traversal
     # 1. Resolve project root and allowed config directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
