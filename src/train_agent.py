@@ -12,6 +12,9 @@ import numpy as np
 from numba import njit
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
+import joblib
 
 @njit
 def _compute_tbm_labels_njit(prices, atr, opt_pt, opt_sl, max_holding_bars):
@@ -140,7 +143,7 @@ def main():
     if args.save_path is None:
         save_path = f"models/{args.model}_trading_bot"
         if args.model == "xgb":
-            save_path += ".json"
+            save_path += ".pkl"
     else:
         save_path = args.save_path
 
@@ -200,7 +203,8 @@ def main():
 
         X = np.vstack(all_features)
         y = np.concatenate(all_labels)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train_full, X_test, y_train_full, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_calib, y_train, y_calib = train_test_split(X_train_full, y_train_full, test_size=0.2, random_state=42)
 
         model = xgb.XGBClassifier(
             objective='multi:softprob',
@@ -215,12 +219,16 @@ def main():
         print("Fitting XGBoost model on TBM labels...")
         model.fit(X_train, y_train)
 
-        predictions = model.predict(X_test)
+        print("Calibrating XGBoost model probabilities...")
+        calibrated_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method='sigmoid')
+        calibrated_clf.fit(X_calib, y_calib)
+
+        predictions = calibrated_clf.predict(X_test)
         print("Accuracy Score:", accuracy_score(y_test, predictions))
         print("Classification Report:\n", classification_report(y_test, predictions))
 
         os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else ".", exist_ok=True)
-        model.save_model(save_path)
+        joblib.dump(calibrated_clf, save_path)
         print("XGBoost training complete and model saved.")
 
 if __name__ == "__main__":
@@ -249,6 +257,8 @@ def train_xgb(ticker, **kwargs):
     X = df[feature_cols].values
     y = labels + 1 # shift -1, 0, 1 to 0, 1, 2
 
+    X_train, X_calib, y_train, y_calib = train_test_split(X, y, test_size=0.2, random_state=42)
+
     model = xgb.XGBClassifier(
         objective='multi:softprob',
         num_class=3,
@@ -256,8 +266,12 @@ def train_xgb(ticker, **kwargs):
         **kwargs
     )
 
-    model.fit(X, y)
-    return model
+    model.fit(X_train, y_train)
+
+    calibrated_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method='sigmoid')
+    calibrated_clf.fit(X_calib, y_calib)
+
+    return calibrated_clf
 
 def train_ppo(ticker, total_timesteps=300000, **kwargs):
     """

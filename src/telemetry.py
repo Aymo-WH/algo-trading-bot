@@ -5,6 +5,7 @@ import json
 import warnings
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score, f1_score, log_loss
 from core.trading_gym import TradingEnv
 from core.meta_agent import MetaAgent
@@ -32,7 +33,11 @@ def run_telemetry(ticker):
     xgb_model = None
     ppo_model = None
 
-    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
+    # Try .pkl first, fallback to .json for backwards compatibility
+    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.pkl")
+    if not os.path.exists(xgb_path):
+        xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
+
     ppo_path = os.path.join(MODELS_DIR, "ppo_meta_labeler.zip")
 
     if os.path.exists(xgb_path):
@@ -222,6 +227,17 @@ def run_telemetry(ticker):
     print(f"Average Inference Latency:      {avg_inference:.2f} ms")
     print(f"Average Reconstruction Latency: {avg_reconstruction:.2f} ms")
     print("==================================================\n")
+
+    # Generate Histogram for Calibrated Probabilities
+    plt.figure(figsize=(10, 6))
+    plt.hist(meta_y_prob, bins=20, color='blue', alpha=0.7)
+    plt.title(f'Calibrated Probabilities Distribution - {ticker}')
+    plt.xlabel('Probability')
+    plt.ylabel('Frequency')
+    plt.grid(axis='y', alpha=0.75)
+    plt.savefig(f"telemetry_prob_histogram_{ticker}.png")
+    plt.close()
+    print(f"Saved calibrated probability histogram to telemetry_prob_histogram_{ticker}.png")
 
 if __name__ == "__main__":
     import argparse
