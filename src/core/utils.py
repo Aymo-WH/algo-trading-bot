@@ -58,7 +58,7 @@ def load_agent(model_path: str):
     Loads a trained model from disk. Supports Stable-Baselines3 (PPO) and XGBoost.
 
     Args:
-        model_path (str): The path to the saved model file (.zip or .json).
+        model_path (str): The path to the saved model file (.zip, .pkl, or .json).
 
     Returns:
         The loaded model instance.
@@ -70,10 +70,14 @@ def load_agent(model_path: str):
         from stable_baselines3 import PPO
         return PPO.load(model_path)
     elif "xgb" in model_path.lower():
+        import joblib
         import xgboost as xgb
-        # Assuming we save the XGBClassifier model using native save_model to .json
-        model = xgb.XGBClassifier()
-        model.load_model(model_path)
-        return model
+        if model_path.endswith('.pkl'):
+            return joblib.load(model_path)
+        else:
+            # Assuming we save the XGBClassifier model using native save_model to .json
+            model = xgb.XGBClassifier()
+            model.load_model(model_path)
+            return model
     else:
         raise ValueError(f"Unknown model type for {model_path}")
