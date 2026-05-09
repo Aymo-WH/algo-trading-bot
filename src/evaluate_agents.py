@@ -95,6 +95,8 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     trades_list = []
     fees_list = []
     all_daily_returns = []
+    win_rate_list = []
+    max_drawdown_list = []
 
     # Iterate over the pre-defined start steps
     for start_step in start_steps:
@@ -106,6 +108,13 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
 
         # Track portfolio value for daily returns
         prev_portfolio_value = INITIAL_CAPITAL
+
+        episode_max_drawdown = 0.0
+        episode_peak_net_worth = INITIAL_CAPITAL
+        episode_round_trips = 0
+        episode_profitable_round_trips = 0
+        was_in_position = False
+        entry_portfolio_value = 0.0
 
         terminated = False
         truncated = False
@@ -144,9 +153,27 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
             current_portfolio_value = INITIAL_CAPITAL + episode_profit
             daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value if prev_portfolio_value > 0 else 0
             all_daily_returns.append(daily_return)
+
+            episode_peak_net_worth = max(episode_peak_net_worth, current_portfolio_value)
+            current_drawdown = (episode_peak_net_worth - current_portfolio_value) / episode_peak_net_worth if episode_peak_net_worth > 0 else 0.0
+            episode_max_drawdown = max(episode_max_drawdown, current_drawdown)
+
+            is_in_position = env.shares_held > 1e-6
+            if is_in_position and not was_in_position:
+                entry_portfolio_value = prev_portfolio_value
+            elif not is_in_position and was_in_position:
+                episode_round_trips += 1
+                if current_portfolio_value > entry_portfolio_value:
+                    episode_profitable_round_trips += 1
+            was_in_position = is_in_position
+
             prev_portfolio_value = current_portfolio_value
 
             obs = next_obs
+
+        episode_win_rate = (episode_profitable_round_trips / episode_round_trips) * 100 if episode_round_trips > 0 else 0.0
+        win_rate_list.append(episode_win_rate)
+        max_drawdown_list.append(episode_max_drawdown * 100)
 
         # Calculate Episode Metrics
         final_value = INITIAL_CAPITAL + episode_profit
@@ -172,6 +199,8 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     total_net_profit = np.sum(profit_list)
     total_trades = np.sum(trades_list)
     total_fees = np.sum(fees_list)
+    avg_win_rate = np.mean(win_rate_list)
+    avg_max_drawdown = np.mean(max_drawdown_list)
 
     return {
         "Net Profit": total_net_profit,
@@ -179,6 +208,8 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         "CAGR": avg_cagr,
         "Trades": total_trades,
         "Fees": total_fees,
+        "Win Rate (%)": avg_win_rate,
+        "Max Drawdown (%)": avg_max_drawdown,
         "Start Date": df['Date'].iloc[start_steps[0]], # Representative
         "End Date": df['Date'].iloc[-1],
         "daily_returns": all_daily_returns
@@ -446,6 +477,8 @@ def main(active_tickers=None):
                 "Net Profit ($)": round(metrics["Net Profit"], 2),
                 "ROI (%)": round(metrics["ROI"], 2),
                 "CAGR (%)": round(metrics["CAGR"], 2),
+                "Win Rate (%)": round(metrics["Win Rate (%)"], 2),
+                "Max Drawdown (%)": round(metrics["Max Drawdown (%)"], 2),
                 "vs B&H ROI (%)": round(metrics["ROI"] - bh_roi, 2),
                 "vs SP500 ROI (%)": round(metrics["ROI"] - sp500_roi, 2)
             })
@@ -464,7 +497,7 @@ def main(active_tickers=None):
     print("STRATEGIC EVALUATION MATRIX")
     print("="*120)
     # Reorder columns
-    cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Trades", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
+    cols = ["Agent", "Stock", "Net Profit ($)", "ROI (%)", "CAGR (%)", "Win Rate (%)", "Max Drawdown (%)", "Trades", "Fees ($)", "vs B&H ROI (%)", "vs SP500 ROI (%)"]
 
     # Print formatted string
     print(results_df[cols].to_string(index=False))
@@ -476,8 +509,29 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, default='config/config_phase1.json')
     args = parser.parse_args()
 
+    # Security Fix: Prevent Path Traversal
+    # 1. Resolve project root and allowed config directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    allowed_config_dir = os.path.realpath(os.path.join(project_root, "config"))
+
+    # 2. Resolve path: if simple filename, assume in config/
+    if os.path.dirname(args.config) == "":
+        target_path = os.path.join(allowed_config_dir, args.config)
+    else:
+        if not os.path.isabs(args.config):
+            target_path = os.path.join(project_root, args.config)
+        else:
+            target_path = args.config
+
+    # 3. Final Security Validation
+    abs_config_path = os.path.realpath(target_path)
+    if not abs_config_path.startswith(allowed_config_dir + os.sep) and abs_config_path != allowed_config_dir:
+        print(f"[ERROR] Security: Configuration path '{args.config}' is restricted.")
+        exit(1)
+
     import json
-    with open(args.config, 'r') as f:
+    with open(abs_config_path, 'r') as f:
         config = json.load(f)
         active_tickers = config.get("tickers", [])
 
