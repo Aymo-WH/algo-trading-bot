@@ -321,11 +321,15 @@ class TradingEnv(gym.Env):
 
         base_gross_profit = daily_return * 100
         bet_size = abs(act)
-        turnover_penalty_coef = self.transaction_fee_percent * 100
+        turnover_penalty_coef = self.transaction_fee_percent * 20
         variance_penalty_coef = (current_atr / current_price) * 100 if current_price > 0 else 0.0
-        cvar_penalty = drawdown * 100 if drawdown > 0.05 else 0.0
+        cvar_penalty = drawdown * 50 if drawdown > 0.05 else 0.0
 
         reward = base_gross_profit - (turnover_penalty_coef * bet_size) - (variance_penalty_coef * (bet_size ** 2)) - cvar_penalty
+
+        directional_pnl = base_gross_profit
+        if directional_pnl > 0:
+            reward += directional_pnl * 0.5
     
         # Terminate if we reach the end of the dataframe
         terminated = (self.current_step - self.start_step >= self.episode_length) or \
