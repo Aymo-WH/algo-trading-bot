@@ -42,15 +42,14 @@ def run_live_inference(config_path):
         return
 
     # Load Brain
-    xgb_path = "models/xgb_trading_bot.json"
+    xgb_path = "models/xgb_trading_bot.pkl"
     
     if not os.path.exists(xgb_path):
         print(f"[ERROR] XGBoost model not found at {xgb_path}.")
         return
 
     print("[SYSTEM] Loading XGBoost Brain...")
-    model = xgb.XGBClassifier()
-    model.load_model(xgb_path)
+    model = joblib.load(xgb_path)
 
     # Boot Exchange Connection
     print("[SYSTEM] Connecting to Binance Testnet...")

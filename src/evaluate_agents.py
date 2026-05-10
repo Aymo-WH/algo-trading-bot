@@ -6,6 +6,7 @@ from core.meta_agent import MetaAgent
 import glob
 import os
 import warnings
+import joblib
 from core.utils import flatten_multiindex_columns, load_agent
 
 # Suppress warnings for cleaner output
@@ -84,7 +85,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # to the environment so it can construct the observation if PPO expects it.
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.json")
+    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.pkl")
 
     # Ensure episode length aligns with our non-overlapping windows
     env.episode_length = len(df) // 5
@@ -316,11 +317,11 @@ def main(active_tickers=None):
     print("Starting Evaluation...")
 
     # Load Primary Target Model directly instead of searching all models
-    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
+    xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.pkl")
     ppo_path = os.path.join(MODELS_DIR, "ppo_trading_bot.zip")
 
     if not os.path.exists(xgb_path) or not os.path.exists(ppo_path):
-        print("Required models (xgb_trading_bot.json, ppo_trading_bot.zip) not found in models/")
+        print("Required models (xgb_trading_bot.pkl, ppo_trading_bot.zip) not found in models/")
         return
 
     # Find Data
