@@ -1,0 +1,12 @@
+pandas
+numpy
+scikit-learn
+yfinance
+xgboost
+joblib
+ccxt
+statsmodels
+python-dotenv
+stable-baselines3[extra]
+gymnasium
+shimmy
