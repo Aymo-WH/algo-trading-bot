@@ -71,13 +71,6 @@ def load_agent(model_path: str):
         return PPO.load(model_path)
     elif "xgb" in model_path.lower():
         import joblib
-        import xgboost as xgb
-        if model_path.endswith('.pkl'):
-            return joblib.load(model_path)
-        else:
-            # Assuming we save the XGBClassifier model using native save_model to .json
-            model = xgb.XGBClassifier()
-            model.load_model(model_path)
-            return model
+        return joblib.load(model_path)
     else:
         raise ValueError(f"Unknown model type for {model_path}")
