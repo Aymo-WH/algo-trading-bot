@@ -58,9 +58,8 @@ class TradingEnv(gym.Env):
         # Load XGBoost model if provided
         self.xgb_model = None
         if xgb_model_path and os.path.exists(xgb_model_path):
-            import xgboost as xgb
-            self.xgb_model = xgb.XGBClassifier()
-            self.xgb_model.load_model(xgb_model_path)
+            from core.utils import load_agent
+            self.xgb_model = load_agent(xgb_model_path)
 
         # Load data
         if df is not None:
