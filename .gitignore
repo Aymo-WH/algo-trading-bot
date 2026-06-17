@@ -14,3 +14,6 @@ venv/
 .idea/
 Thumbs.db
 .gradio/
+
+# Notebooks are maintained locally for now (kept out of git)
+*.ipynb

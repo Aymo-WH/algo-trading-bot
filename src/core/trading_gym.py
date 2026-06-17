@@ -22,7 +22,7 @@ class TradingEnv(gym.Env):
     # Class-level cache to store loaded DataFrames keyed by data_dir
     _DATA_CACHE = {}
 
-    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10, xgb_model_path=None):
+    def __init__(self, df=None, is_discrete=False, data_dir='data/', transaction_fee_percent=None, window_size=10, xgb_model_path=None, config_path=None):
         """
         Initializes the trading environment and pre-loads data into memory caches to O(1) step access.
 
@@ -48,7 +48,7 @@ class TradingEnv(gym.Env):
         self.is_discrete = is_discrete
 
         if transaction_fee_percent is None:
-            config = load_config()
+            config = load_config(config_path) if config_path else load_config()
             self.transaction_fee_percent = config.get('transaction_fee_percent', 0.0005)
         else:
             self.transaction_fee_percent = transaction_fee_percent
@@ -138,7 +138,6 @@ class TradingEnv(gym.Env):
         )
 
         self.obs_buffer = np.empty((3,), dtype=np.float32)
-        self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
         self.peak_net_worth = 10000.0

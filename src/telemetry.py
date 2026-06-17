@@ -17,7 +17,7 @@ MODELS_DIR = "models/"
 DATA_DIR = "data/test/"
 INITIAL_CAPITAL = 10000.0
 
-def run_telemetry(ticker):
+def run_telemetry(ticker, config_path=None):
     print(f"\nEvaluating Telemetry for {ticker}...")
 
     data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
@@ -38,7 +38,7 @@ def run_telemetry(ticker):
     if not os.path.exists(xgb_path):
         xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
 
-    ppo_path = os.path.join(MODELS_DIR, "ppo_meta_labeler.zip")
+    ppo_path = os.path.join(MODELS_DIR, "ppo_trading_bot.zip")
 
     if os.path.exists(xgb_path):
         xgb_model = load_agent(xgb_path)
@@ -55,7 +55,7 @@ def run_telemetry(ticker):
     # RUN ISOLATED XGBoost (Flat 1-unit bet size)
     # -------------------------------------------------------------------------
     # We use a non-discrete env but without PPO, just outputting XGB signal
-    env_xgb = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path)
+    env_xgb = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path, config_path=config_path)
     obs, _ = env_xgb.reset(options={'start_step': 0})
 
     xgb_y_true = []
@@ -115,7 +115,7 @@ def run_telemetry(ticker):
     # -------------------------------------------------------------------------
     # RUN COMBINED SYSTEM (XGBoost + PPO Meta-Labeling)
     # -------------------------------------------------------------------------
-    env_meta = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path)
+    env_meta = TradingEnv(df=df, is_discrete=False, xgb_model_path=xgb_path, config_path=config_path)
     obs, _ = env_meta.reset(options={'start_step': 0})
 
     meta_y_true = []
@@ -251,4 +251,4 @@ if __name__ == "__main__":
         active_tickers = config.get("tickers", [])
 
     for ticker in active_tickers:
-        run_telemetry(ticker)
+        run_telemetry(ticker, config_path=args.config)

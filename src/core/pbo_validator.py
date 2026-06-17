@@ -41,7 +41,7 @@ class PBOValidator:
             float: The calculated PBO value (e.g., 0.15 means 15% probability).
         """
         # Step 1: Partition into S sub-matrices
-        submatrices = np.array_split(self.M.values, self.S, axis=0)
+        submatrices = np.array_split(np.asarray(self.M), self.S, axis=0)
         
         logits = []
         # Step 2: Generate combinations (S choose S/2)
