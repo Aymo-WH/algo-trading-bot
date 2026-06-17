@@ -2,6 +2,7 @@ import argparse
 import os
 import pandas as pd
 from core.trading_gym import TradingEnv
+from core.utils import pca_feature_columns
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
@@ -177,7 +178,9 @@ def main():
         if not data_files:
             raise FileNotFoundError(f"No data files found in {args.data_dir} directory.")
 
-        feature_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
+        # Feature columns are the PCA components (count is dynamic after enrichment);
+        # discovered from the first valid file and required to match across tickers.
+        feature_cols = None
 
         # PURGED, EMBARGOED, PER-TICKER TEMPORAL SPLIT (no random shuffle).
         # Random splitting leaks autocorrelated neighbours across train/calib and
@@ -191,7 +194,13 @@ def main():
             df = pd.read_csv(file).dropna().reset_index(drop=True)
             if len(df) < 100:  # need room for a 3-way temporal split + embargo
                 continue
-            if not set(feature_cols).issubset(df.columns):
+            fc = pca_feature_columns(df.columns)
+            if not fc:
+                continue
+            if feature_cols is None:
+                feature_cols = fc
+            elif fc != feature_cols:
+                print(f"Skipping {file}: PCA columns {fc} differ from {feature_cols}")
                 continue
 
             feats = df[feature_cols].values
@@ -265,10 +274,10 @@ def train_xgb(ticker, **kwargs):
         raise FileNotFoundError(f"Data file for {ticker} not found.")
 
     df = pd.read_csv(ticker_file).dropna().reset_index(drop=True)
-    feature_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
+    feature_cols = pca_feature_columns(df.columns)
 
-    if not set(feature_cols).issubset(df.columns):
-        raise ValueError(f"Missing required features in {ticker_file}.")
+    if not feature_cols:
+        raise ValueError(f"Missing PCA feature columns in {ticker_file}.")
 
     labels = compute_tbm_labels(df)
     X = df[feature_cols].values
