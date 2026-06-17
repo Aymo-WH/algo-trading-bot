@@ -138,7 +138,6 @@ class TradingEnv(gym.Env):
         )
 
         self.obs_buffer = np.empty((3,), dtype=np.float32)
-        self._forced_sell_action = np.array([0.0], dtype=np.float32)
 
         self.initial_balance = 10000.0
         self.peak_net_worth = 10000.0
