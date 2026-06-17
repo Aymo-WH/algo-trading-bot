@@ -210,7 +210,7 @@ class TradingEnv(gym.Env):
         The function checks if an upper (Profit Taking), lower (Stop Loss), or vertical (Time)
         barrier has been breached based on dynamic Optimal Trading Rules (OTR). If breached,
         it forcefully overrides the agent's action and liquidates the position. The reward
-        uses a Sortino-style Risk-Adjusted proxy, heavily penalizing downside volatility.
+        is daily_return*100, with a +50% bonus applied when the return is positive.
 
         Args:
         action (int/float/np.ndarray): The agent's requested action.
@@ -250,14 +250,15 @@ class TradingEnv(gym.Env):
         # Override action to force a 100% sell if a barrier is breached
         if forced_sell:
             if self.is_discrete:
-                action = 0  # Assuming 0 maps to -1.0 in your mapping dict
-            else:
-                action = self._forced_sell_action
+                action = 0  # 0 maps to -1.0 in the mapping dict below
 
         # ETF TRICK: Track pure mark-to-market before rebalancing
         prev_val = self.cash + (self.shares_held * current_price)
 
-        if self.is_discrete:
+        if forced_sell and not self.is_discrete:
+            # Bypass xgb_signal multiplication — liquidate 100% regardless of signal direction
+            act = -1.0
+        elif self.is_discrete:
             mapping = {0: -1.0, 1: -0.5, 2: 0.0, 3: 0.5, 4: 1.0}
             act = mapping[int(action)]
         else:
