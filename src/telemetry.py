@@ -38,7 +38,7 @@ def run_telemetry(ticker):
     if not os.path.exists(xgb_path):
         xgb_path = os.path.join(MODELS_DIR, "xgb_trading_bot.json")
 
-    ppo_path = os.path.join(MODELS_DIR, "ppo_meta_labeler.zip")
+    ppo_path = os.path.join(MODELS_DIR, "ppo_trading_bot.zip")
 
     if os.path.exists(xgb_path):
         xgb_model = load_agent(xgb_path)

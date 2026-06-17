@@ -4,7 +4,7 @@ import pandas as pd
 from core.trading_gym import TradingEnv
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 import multiprocessing
 import torch
 import random
@@ -153,14 +153,15 @@ def main():
 
     if args.model == "ppo":
         n_cpu = max(1, multiprocessing.cpu_count() - 1)
-        print(f"Igniting {n_cpu} parallel environments for PPO training...")
+        vec_env_cls = DummyVecEnv if n_cpu == 1 else SubprocVecEnv
+        print(f"Igniting {n_cpu} parallel environment(s) for PPO training (using {vec_env_cls.__name__})...")
 
         env = make_vec_env(
             TradingEnv,
             n_envs=n_cpu,
             seed=42,
             env_kwargs={"is_discrete": False, "data_dir": args.data_dir, "xgb_model_path": "models/xgb_trading_bot.pkl"},
-            vec_env_cls=SubprocVecEnv
+            vec_env_cls=vec_env_cls
         )
         env.action_space.seed(42)
         model = PPO("MlpPolicy", env, verbose=1, ent_coef=0.01, seed=42)
@@ -297,6 +298,9 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
     is_discrete = False
     data_dir = "data/train/"
 
+    n_envs = max(1, multiprocessing.cpu_count() - 1)
+    vec_env_cls = DummyVecEnv if n_envs == 1 else SubprocVecEnv
+
     ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
     if os.path.exists(ticker_file):
         df = pd.read_csv(ticker_file)
@@ -304,18 +308,18 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
             df['Date'] = pd.to_datetime(df['Date'])
         env = make_vec_env(
             TradingEnv,
-            n_envs=max(1, multiprocessing.cpu_count() - 1),
+            n_envs=n_envs,
             seed=42,
             env_kwargs={"df": df, "is_discrete": False, "xgb_model_path": "models/xgb_trading_bot.pkl"},
-            vec_env_cls=SubprocVecEnv
+            vec_env_cls=vec_env_cls
         )
     else:
         env = make_vec_env(
             TradingEnv,
-            n_envs=max(1, multiprocessing.cpu_count() - 1),
+            n_envs=n_envs,
             seed=42,
             env_kwargs={"is_discrete": False, "data_dir": data_dir, "xgb_model_path": "models/xgb_trading_bot.pkl"},
-            vec_env_cls=SubprocVecEnv
+            vec_env_cls=vec_env_cls
         )
 
     env.action_space.seed(42)

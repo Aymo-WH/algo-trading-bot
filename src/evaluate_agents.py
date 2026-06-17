@@ -214,39 +214,6 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
         "daily_returns": all_daily_returns
     }
 
-def evaluate_model(dqn_model, ppo_model, ticker):
-    """
-    Orchestrates the evaluation of multiple models (Hold, DQN, PPO, MetaAgent) for a ticker.
-
-    This function compares standalone base models against the combined Meta-Labeling architecture.
-    It iterates over 5 non-overlapping fixed windows to generate evaluation metrics, which are
-    then printed in a comparative table.
-
-    Args:
-        dqn_model (stable_baselines3.DQN): Trained directional agent.
-        ppo_model (stable_baselines3.PPO): Trained sizing agent.
-        ticker (str): The stock ticker to evaluate.
-    """
-    # Load specific dataframe
-    data_path = os.path.join(DATA_DIR, f"{ticker}_data.csv")
-    if not os.path.exists(data_path):
-        raise FileNotFoundError(f"Data for {ticker} not found in {DATA_DIR}")
-
-    df = pd.read_csv(data_path)
-    if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'])
-
-    # Evaluate across 5 non-overlapping fixed windows
-    step_size = len(df) // 5
-    steps = [i * step_size for i in range(5)]
-
-    meta_agent = MetaAgent(dqn_model=dqn_model, ppo_model=ppo_model, step_size=0.10)
-
-    # Run Evaluation
-    metrics = evaluate_model_on_stock(meta_agent, df, ticker, False, steps)
-
-    return None, None, metrics["daily_returns"]
-
 def get_benchmark_sp500(start_date, end_date, sp500_df=None):
     """
     Retrieves S&P 500 benchmark performance with optimized caching and slicing.
