@@ -62,7 +62,7 @@ def calculate_cagr(start_value, end_value, start_date, end_date):
     if end_value <= 0: return -1.0 # Total loss
     return (end_value / start_value) ** (1 / years) - 1
 
-def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
+def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps, config_path=None):
     """
     Evaluates a trained model on a specific stock's DataFrame over predefined chronological steps.
 
@@ -85,7 +85,7 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
     # to the environment so it can construct the observation if PPO expects it.
 
     # Initialize Environment with specific DF
-    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.pkl")
+    env = TradingEnv(df=df, is_discrete=is_discrete, xgb_model_path="models/xgb_trading_bot.pkl", config_path=config_path)
 
     # Ensure episode length aligns with our non-overlapping windows
     env.episode_length = len(df) // 5
@@ -275,7 +275,7 @@ def get_benchmark_sp500(start_date, end_date, sp500_df=None):
         print(f"Error fetching S&P 500: {e}")
         return 0.0, 0.0
 
-def main(active_tickers=None):
+def main(active_tickers=None, config_path=None):
     """
     Command-line execution flow for evaluating agents against baseline hold strategies.
     """
@@ -428,7 +428,7 @@ def main(active_tickers=None):
             is_discrete = False
 
             # Run Evaluation
-            metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps)
+            metrics = evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps, config_path=config_path)
 
             # Benchmarks (Buy & Hold) over the fixed non-overlapping windows
             bh_roi = stock_bh_benchmarks[stock_name]
@@ -502,6 +502,6 @@ if __name__ == "__main__":
         active_tickers = config.get("tickers", [])
 
     if active_tickers:
-        main(active_tickers)
+        main(active_tickers, config_path=abs_config_path)
     else:
-        main()
+        main(config_path=abs_config_path)
