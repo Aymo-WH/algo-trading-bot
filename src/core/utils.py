@@ -32,6 +32,24 @@ def load_config(config_path: str = 'config/config_phase1.json') -> dict:
     _CONFIG_CACHE[config_path] = cfg
     return cfg
 
+def pca_feature_columns(columns) -> list:
+    """
+    Return the PCA_* feature column names sorted by their numeric index.
+
+    The number of PCA components is no longer fixed at 4 (feature enrichment widened
+    the input set), so consumers must discover the columns dynamically rather than
+    hardcoding PCA_1..PCA_4. Sorting by the integer suffix guarantees a stable,
+    consistent feature order between training and inference.
+
+    Args:
+        columns: An iterable of column names (e.g. df.columns).
+
+    Returns:
+        list: ['PCA_1', 'PCA_2', ...] in numeric order.
+    """
+    pca_cols = [c for c in columns if str(c).startswith('PCA_')]
+    return sorted(pca_cols, key=lambda c: int(str(c).split('_')[1]))
+
 def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     Flattens a multi-index column structure into a single level.
