@@ -424,9 +424,28 @@ def fetch_data(config_path='config/config_phase1.json'):
             print(f"Warning: Could not find stationary series for {ticker} with d < 1.0. Using d=1.0")
             df['Close_FFD'] = frac_diff_ffd(df[['Close']], 1.0)['Close']
 
-        tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF']
-        
-        # 1. Drop NaNs FIRST so the split calculations are accurate
+        # --- Price-based directional features (strictly backward-looking) ---
+        # The microstructural features (VPIN/Amihud/Kyle/SADF) describe HOW the market
+        # trades, not WHICH WAY it is going -- so the OOS direction edge was ~50%.
+        # Add momentum, realized volatility, mean-reversion and the FFD memory series
+        # so the PCA state actually carries directional information for XGBoost.
+        print(f"Calculating Price/Momentum Features for {ticker}...")
+        close = df['Close']
+        df['RET_1']  = close.pct_change(1)
+        df['RET_3']  = close.pct_change(3)
+        df['RET_5']  = close.pct_change(5)
+        df['RET_10'] = close.pct_change(10)
+        df['VOL_20'] = close.pct_change().rolling(20).std()
+        roll_mean = close.rolling(20).mean()
+        roll_std  = close.rolling(20).std()
+        df['ZSCORE_20'] = (close - roll_mean) / (roll_std + 1e-8)
+
+        # Microstructural (flow) + price (directional) features fed to the PCA rotation.
+        tech_cols = ['VPIN', 'Amihud_Illiq', 'Kyles_Lambda', 'SADF',
+                     'Close_FFD', 'RET_1', 'RET_3', 'RET_5', 'RET_10', 'VOL_20', 'ZSCORE_20']
+
+        # 1. Drop NaNs (and any inf from divisions) FIRST so the split calculations are accurate
+        df = df.replace([np.inf, -np.inf], np.nan)
         df = df.dropna()
 
         # 2. Dynamically calculate the split date on healthy data
@@ -442,7 +461,12 @@ def fetch_data(config_path='config/config_phase1.json'):
         scaler.fit(df.loc[train_clean_idx, tech_cols])
         scaled_tech = scaler.transform(df.loc[all_clean_idx, tech_cols])
         
-        pca = PCA(n_components=4) # Changed from 5 to 4 because we now have 4 features
+        # Full-rank rotation: n_components == n_features, so PCA decorrelates the
+        # inputs with ZERO information loss (no truncation of the directional signal).
+        # The component count is fixed across tickers so the pooled XGBoost and the
+        # gym observation stay consistent.
+        n_comp = len(tech_cols)
+        pca = PCA(n_components=n_comp)
         scaled_train_tech = scaler.transform(df.loc[train_clean_idx, tech_cols])
         pca.fit(scaled_train_tech)
         pca_features = pca.transform(scaled_tech)
@@ -451,7 +475,7 @@ def fetch_data(config_path='config/config_phase1.json'):
         joblib.dump(scaler, f'models/matrices/scaler_{clean_ticker}.pkl')
         joblib.dump(pca, f'models/matrices/pca_{clean_ticker}.pkl')
 
-        pca_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
+        pca_cols = [f'PCA_{i+1}' for i in range(n_comp)]
         df_pca = pd.DataFrame(pca_features, index=all_clean_idx, columns=pca_cols)
         df = pd.concat([df, df_pca], axis=1)
         df.drop(columns=tech_cols, inplace=True)

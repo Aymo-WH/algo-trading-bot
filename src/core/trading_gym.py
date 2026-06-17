@@ -5,7 +5,7 @@ import numpy as np
 import glob
 import random
 import os
-from core.utils import load_config
+from core.utils import load_config, pca_feature_columns
 
 class TradingEnv(gym.Env):
     """
@@ -84,10 +84,13 @@ class TradingEnv(gym.Env):
                             print(f"Skipping {file}: Empty or not enough rows after dropna.")
                             continue
 
-                        required_columns = ['Close', 'Close_FFD', 'PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
+                        # Require Close + the PCA feature columns (count is no longer
+                        # fixed at 4; Close_FFD is now consumed by the PCA, not a column).
+                        pca_cols = pca_feature_columns(df_loaded.columns)
+                        required_columns = ['Close'] + pca_cols
                         # Validate columns
-                        if not set(required_columns).issubset(df_loaded.columns):
-                            print(f"Skipping {file}: Missing required columns. Found {df_loaded.columns}")
+                        if 'Close' not in df_loaded.columns or len(pca_cols) == 0:
+                            print(f"Skipping {file}: Missing Close or PCA_* columns. Found {df_loaded.columns}")
                             continue
 
                         # Validate data types
@@ -107,8 +110,8 @@ class TradingEnv(gym.Env):
         # Precompute observation matrices and prices for all DataFrames
         self.precomputed_data = []
         for d in self.dfs:
-            # Only pull the 4 features XGBoost needs
-            obs = d[['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']].values.astype(np.float32)
+            # Pull the PCA feature columns XGBoost was trained on (count is dynamic)
+            obs = d[pca_feature_columns(d.columns)].values.astype(np.float32)
             prices = d['Close'].values
             atr = prices * 0.02 # Removed ATR dependency
             opt_pt = d['Optimal_PT'].values if 'Optimal_PT' in d.columns else np.full(len(d), 2.0)
