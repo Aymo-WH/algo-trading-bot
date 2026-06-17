@@ -7,7 +7,7 @@ class MetaAgent:
         self.step_size = step_size
         self.action_space = ppo_model.action_space
 
-    def predict(self, pca_features, volatility, drawdown, deterministic=True):
+    def predict(self, pca_features, unrealized_pnl=0.0, deterministic=True):
         # 1. Primary Model (XGBoost) predicts direction
         probs = self.xgb_model.predict_proba(pca_features.reshape(1, -1))[0]
         pred_class = np.argmax(probs)
@@ -17,8 +17,8 @@ class MetaAgent:
         if xgb_signal == 0.0:
             return np.array([0.0]), None
 
-        # 2. Build the 1D Meta State array for PPO
-        obs = np.array([xgb_signal, xgb_prob, volatility, drawdown], dtype=np.float32)
+        # 2. Build the 1D Meta State array for PPO — matches trading_gym.py training obs
+        obs = np.array([xgb_signal, xgb_prob, unrealized_pnl], dtype=np.float32)
 
         # 3. Secondary Model (PPO) predicts bet size
         ppo_act, _ = self.ppo.predict(obs, deterministic=deterministic)
