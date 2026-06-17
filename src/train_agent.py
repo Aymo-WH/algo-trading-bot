@@ -177,56 +177,72 @@ def main():
         if not data_files:
             raise FileNotFoundError(f"No data files found in {args.data_dir} directory.")
 
-        all_features = []
-        all_labels = []
-
         feature_cols = ['PCA_1', 'PCA_2', 'PCA_3', 'PCA_4']
 
+        # PURGED, EMBARGOED, PER-TICKER TEMPORAL SPLIT (no random shuffle).
+        # Random splitting leaks autocorrelated neighbours across train/calib and
+        # inflates in-sample metrics. Instead, split each ticker chronologically into
+        # train / validation (early stopping) / calibration, with an embargo gap so the
+        # Triple-Barrier label horizon (max_holding_bars) cannot peek across boundaries.
+        EMBARGO = 15  # = max_holding_bars; TBM labels look up to 15 bars ahead
+
+        Xtr, ytr, Xval, yval, Xcal, ycal = [], [], [], [], [], []
         for file in data_files:
             df = pd.read_csv(file).dropna().reset_index(drop=True)
-            if len(df) < 20:
+            if len(df) < 100:  # need room for a 3-way temporal split + embargo
                 continue
-
             if not set(feature_cols).issubset(df.columns):
                 continue
 
-            labels = compute_tbm_labels(df)
-            features = df[feature_cols].values
+            feats = df[feature_cols].values
+            y = compute_tbm_labels(df) + 1  # map {-1, 0, 1} -> {0, 1, 2}
+            n = len(df)
+            i_tr, i_val = int(n * 0.70), int(n * 0.85)
 
-            # Map labels (-1, 0, 1) to (0, 1, 2)
-            mapped_labels = labels + 1
+            # Drop EMBARGO bars at the END of train and val (labels look forward only)
+            Xtr.append(feats[:max(0, i_tr - EMBARGO)]);          ytr.append(y[:max(0, i_tr - EMBARGO)])
+            Xval.append(feats[i_tr:max(i_tr, i_val - EMBARGO)]);  yval.append(y[i_tr:max(i_tr, i_val - EMBARGO)])
+            Xcal.append(feats[i_val:]);                           ycal.append(y[i_val:])
 
-            all_features.append(features)
-            all_labels.append(mapped_labels)
-
-        if not all_features:
+        if not any(len(a) for a in Xtr):
             raise ValueError("No valid data loaded for XGBoost.")
 
-        X = np.vstack(all_features)
-        y = np.concatenate(all_labels)
-        X_train_full, X_test, y_train_full, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        X_train, X_calib, y_train, y_calib = train_test_split(X_train_full, y_train_full, test_size=0.2, random_state=42)
+        X_train, y_train = np.vstack(Xtr), np.concatenate(ytr)
+        X_val,   y_val   = np.vstack(Xval), np.concatenate(yval)
+        X_calib, y_calib = np.vstack(Xcal), np.concatenate(ycal)
+        print(f"Temporal split sizes -> train: {len(y_train)}  val: {len(y_val)}  calib: {len(y_calib)}")
 
+        # Regularized model + early stopping on the temporal validation set.
+        # Shallower trees, lower LR, subsampling, and L1/L2 to curb memorisation.
         model = xgb.XGBClassifier(
             objective='multi:softprob',
             num_class=3,
             eval_metric='mlogloss',
             seed=42,
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=5
+            n_estimators=800,        # high cap; early stopping selects the real count
+            learning_rate=0.03,
+            max_depth=3,             # was 5
+            min_child_weight=5,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_lambda=2.0,
+            reg_alpha=0.5,
+            early_stopping_rounds=40,
         )
 
-        print("Fitting XGBoost model on TBM labels...")
-        model.fit(X_train, y_train)
+        print("Fitting regularized XGBoost (early stopping on temporal validation set)...")
+        model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+        print(f"Early stopping selected {model.best_iteration + 1} trees (cap 800).")
 
-        print("Calibrating XGBoost model probabilities...")
+        print("Calibrating XGBoost probabilities on the temporal calibration set...")
         calibrated_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method='sigmoid')
         calibrated_clf.fit(X_calib, y_calib)
 
-        predictions = calibrated_clf.predict(X_test)
-        print("Accuracy Score:", accuracy_score(y_test, predictions))
-        print("Classification Report:\n", classification_report(y_test, predictions))
+        # In-sample sanity report on the held-out calibration slice (NOT the OOS test).
+        # The honest out-of-sample read is the STEP 4 audit on data/test.
+        predictions = calibrated_clf.predict(X_calib)
+        print("In-sample (temporal calib) Accuracy:", accuracy_score(y_calib, predictions))
+        print("Classification Report (calib):\n", classification_report(y_calib, predictions))
 
         os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else ".", exist_ok=True)
         joblib.dump(calibrated_clf, save_path)
