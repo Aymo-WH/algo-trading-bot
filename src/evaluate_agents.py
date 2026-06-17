@@ -147,11 +147,9 @@ def evaluate_model_on_stock(model, df, stock_name, is_discrete, start_steps):
                 episode_trades += 1
                 episode_fees += fee
 
-            # Accumulate reward
-            episode_profit += reward
-
-            # Calculate daily return for this step
-            current_portfolio_value = INITIAL_CAPITAL + episode_profit
+            # Track actual portfolio value from env (not scaled reward)
+            current_portfolio_value = info.get('portfolio_value', prev_portfolio_value)
+            episode_profit = current_portfolio_value - INITIAL_CAPITAL
             daily_return = (current_portfolio_value - prev_portfolio_value) / prev_portfolio_value if prev_portfolio_value > 0 else 0
             all_daily_returns.append(daily_return)
 

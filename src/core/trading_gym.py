@@ -343,7 +343,10 @@ class TradingEnv(gym.Env):
         # Update the 1D buffer for the new step
         self._next_observation(self.current_step, self.cash, self.shares_held, self.obs_buffer)
     
-        return self.obs_buffer, reward, terminated, truncated, {'step_fee': step_fee}
+        return self.obs_buffer, reward, terminated, truncated, {
+            'step_fee': step_fee,
+            'portfolio_value': float(pure_new_val),
+        }
 
     def _next_observation(self, step_idx, cash, shares_held, target_array):
         # Clamp step_idx
