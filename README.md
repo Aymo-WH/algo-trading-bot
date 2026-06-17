@@ -1,93 +1,153 @@
-# The Gordian Project: Dual-Engine Algorithmic Trading
+# The Gordian Project — Directional Alpha Research (Archived)
 
-This repository implements an institutional-grade algorithmic trading pipeline dubbed "The Gordian Project", deeply rooted in Marcos López de Prado's advanced financial machine learning methodologies.  The V2 architecture evolves the project from a research sandbox into a bifurcated production system: a high-compute Research Node (Cloud) and a low-latency Execution Node (Edge).  
+> **Status: PAUSED / research archive (June 2026).** The directional thesis did
+> not clear out-of-sample validation. The engineering infrastructure is sound and
+> reusable; the *alpha hypothesis* (microstructure/price features predicting
+> short-horizon **direction**) is disproven on this universe. Work on
+> volatility-based strategies continues in the successor project,
+> **The Vol-Gordian Project**.
 
----
+This repository implements an institutional-style algorithmic-trading research
+pipeline rooted in Marcos López de Prado's financial-machine-learning methods.
+Its goal was a dual-agent meta-labeling system: an **XGBoost** classifier for
+trade *direction* and a **PPO** agent for *bet sizing*, validated against
+overfitting via PBO/CSCV.
 
-## 🧠 Core Quantitative Features
-The project maintains its foundational commitment to Information-Driven Finance:
-- **Information-Driven Dollar Bars:** Discards chronological time to neutralize market noise and heteroscedasticity. Sampling occurs only when a dynamic threshold of fiat currency is exchanged, restoring statistical normality to price series.
-- **Fractional Differentiation (FFD):** Achieves stationarity while preserving maximum memory. The engine iteratively solves for an optimal $d$-value to ensure the series passes ADF tests without destroying the predictive signals found in historical price levels.
-- **Point-in-Time PCA:** Prevents collinearity by dynamically extracting orthogonal features from the microstructural feature set without introducing look-ahead bias.
-- **Microstructural Dynamics:** Captures informed trading probability and toxic order flow using **VPIN** (Volume-Synchronized Probability of Informed Trading), **SADF** (Supremum Augmented Dickey-Fuller) for bubble detection, and **Amihud Illiquidity** metrics.
-- **Dual-Agent Meta-Labeling:** Strictly separates "Direction" from "Conviction."
-   - **Primary Brain (XGBoost):** Utilizes the Triple-Barrier Method to generate directional signals (LONG/SHORT/HOLD).
-   - **Secondary Agent (PPO):** Acts as the risk manager, dynamically sizing the bet based on statistical confidence.  
-
----
-
-## 🏗️ Architecture V2 Upgrades
-
-*   **Bifurcated Data Engine:** Implements a dual-pathway ingestion system. Traditional equities are sourced via yfinance, while high-volatility digital assets are ingested via CCXT/Binance to ensure volume fidelity for Dollar Bar construction.
-*   **Edge-Inference Protocol:** Optimizes the live execution loop for local hardware. The execution node fetches real-time 60-day windows and applies pre-fitted Scaler and PCA matrices to bypass environment-based "Shape Mismatches".
-*   **Data Leakage Prevention:** Enforces a strict 60-Period Train/Test Embargo to eliminate predictive look-ahead bias and ensure the validity of out-of-sample performance.
-*   **Automated Execution Loop:** Fully integrated with the Binance Testnet API for real-time market order execution with automated receipt ID tracking.
-
-*   **Microstructural Features:** Added VPIN, SADF, and Amihud Illiquidity to better capture market microstructure dynamics and informed trading probability.
-*   **Safe RL Reward Function:** Implemented Turnover, Variance, and Drawdown penalties to strictly penalize excessive trading, volatility, and portfolio drawdown.
-
-*   **Hybrid Vectorization:** Transitioned to a 1D state-tracking loop paired with NumPy reducing functions for highly performant Dollar Bar construction.
-*   **Data Leakage Prevention:** Enforced a strict 60-Period Train/Test Embargo to eliminate predictive look-ahead bias and isolate the out-of-sample datasets.
-*   **Optimized Execution Barriers:** Utilized 3D Tensor broadcasting for calculating the Profit-Taking and Stop-Loss grids, maximizing localized grid search speeds.
-*   **Cloud Execution Safeguards:** Implemented memory optimization techniques (removing DataFrame copies) and absolute path resolution to ensure strict RunPod serverless stability.
+It is published as an honest engineering record — including what worked, what
+didn't, and why the directional approach was set aside.
 
 ---
 
-## 📂 Architecture & Core Modules
+## 📉 Findings & Status (the honest result)
 
-The project follows a strict modular architecture, isolating core engine logic from laboratory tools.
+The pipeline was run end-to-end on hourly dollar bars across 7 assets (sector
+ETFs + crypto majors + TQQQ/VXX), with a purged train/test split.
 
-*   **`data_factory.py`**: The pipeline engine. Fetches a rolling 730-day window, constructs Dollar Bars, calibrates FFD, and exports fitted mathematical matrices to models/matrices/.
-*   (`scaler.pkl`, `pca.pkl`) to `models/matrices/`. It completely wipes old data directories to prevent cross-asset pollution.
-*   **`core/trading_gym.py`**: Contains `TradingEnv`, a highly optimized OpenAI Gym environment. Utilizes an $O(1)$ ring buffer (`collections.deque`) for historical observations and enforces strict data validation to ensure ultra-fast `step()` and `reset()` execution.
-*   **`core/meta_agent.py`**: Combines the primary XGBoost model and secondary PPO model using Meta-Labeling mathematics to generate final, sized trade actions.
-*   **`core/optimize_barriers.py`**: Offline engine to evaluate optimal dynamic execution barriers by estimating O-U parameters and conducting a localized grid search to maximize the Sharpe Ratio.
-*   **`core/pbo_validator.py`**: Computes the PBO via CSCV, employing safety measures (like epsilon injection) to dynamically prevent division-by-zero errors.
-*   **`src/live_inference.py`**: The core execution engine. A lean, production-ready script that loads pre-trained brains and asset-specific matrices for real-time market action.
+- **The direction signal has no out-of-sample edge.** Across three independent
+  experiments the out-of-sample 15-bar win rate never cleared ~51% (a coin flip):
+
+  | Experiment | OOS 15-bar net EV | OOS win rate |
+  |---|---|---|
+  | 4 microstructural features, random split | −0.19% | 50.8% |
+  | + purged temporal split + regularization | −1.12% | 49.2% |
+  | + price/momentum/vol/FFD enrichment (11 features) | −0.94% | 42.7% |
+
+- **In-sample edge was largely a leakage artifact.** As the leaky random
+  `train_test_split` was replaced with a purged, embargoed temporal split, the
+  *in-sample* win rate fell from 63.6% → 53.7%. There was far less real signal
+  than the original metrics suggested.
+
+- **The overfitting gate confirmed it.** PBO via CSCV returned **0.65** (FAIL):
+  the in-sample-best configuration does not survive out-of-sample recombination.
+  Run-to-run results swung from roughly −5% to +5% summed ROI on identical
+  settings — the fingerprint of a noise-dominated signal.
+
+- **Diagnosis.** The microstructural features (VPIN, Amihud, Kyle's λ, SADF) are
+  documented predictors of **volatility and informed-flow regimes**, *not*
+  direction. Short-horizon directional prediction is the hardest problem in
+  quant and, on this universe, it was not learnable with these inputs.
+
+**What this is not:** a failure of engineering. The data pipeline, validation
+gate, and RL sizing harness all work correctly — they are precisely what let us
+*prove* the signal wasn't there before any capital was risked.
 
 ---
 
-## 🚀 Quick Start Guide
+## 🧠 Core Quantitative Infrastructure (sound & reusable)
 
-### 1. Clone & Setup
+- **Information-Driven Dollar Bars** — sample on dollar volume, not clock time, to
+  neutralize heteroscedasticity and restore statistical normality.
+- **Fractional Differentiation (FFD)** — stationarity with maximum memory; solves
+  for the smallest `d` that passes the ADF test.
+- **Point-in-Time PCA** — orthogonalizes the feature set with the scaler/PCA fit
+  on the training split only (no look-ahead). Saved per asset for inference.
+- **Triple-Barrier labels** — profit-take / stop-loss / vertical-time labeling for
+  the directional classifier.
+- **Dual-Agent Meta-Labeling** — XGBoost (direction) → PPO (bet size in `[0,1]`);
+  live action = `xgb_signal × bet_size`.
+- **PBO via CSCV** — the overfitting gate (`core/pbo_validator.py` +
+  `validate_pbo.py`) that ultimately failed the directional system.
+
+---
+
+## 📂 Module Map
+
+- **`src/data_factory.py`** — data pipeline. Fetches a rolling 730-day window
+  (yfinance for equities, CCXT/Binance for crypto), builds Dollar Bars,
+  microstructural + price features, FFD, point-in-time PCA, train/test split with
+  a 60-bar embargo. Exports per-asset scaler/PCA matrices to `models/matrices/`.
+- **`src/train_agent.py`** — `--model {xgb,ppo}`. XGBoost uses a purged per-ticker
+  temporal split (train/validation/calibration) with regularization + early
+  stopping; PPO trains the sizing agent in `TradingEnv`.
+- **`src/core/trading_gym.py`** — `TradingEnv`: action/observation spaces, reward,
+  and Triple-Barrier enforcement (can force-liquidate the position).
+- **`src/core/meta_agent.py`** — inference wrapper combining XGBoost → PPO.
+- **`src/core/optimize_barriers.py`** — Ornstein-Uhlenbeck barrier optimization
+  (dynamic PT/SL multipliers).
+- **`src/core/pbo_validator.py`** — PBO via CSCV.
+- **`src/validate_pbo.py`** — runnable overfitting gate (threshold-grid proxy;
+  swap in a seed/hyperparameter ensemble for the rigorous version).
+- **`src/evaluate_agents.py`** — out-of-sample evaluation vs Buy-and-Hold and S&P 500.
+- **`src/telemetry.py`** — per-agent diagnostics. **`src/live_inference.py`** —
+  Binance-testnet execution skeleton (XGBoost only; **not** validated — see Caveats).
+
+---
+
+## 🚀 Reproducing the Research
+
 ```bash
-git clone https://github.com/aymo-wh/the-gordian-project.git
-cd the-gordian-project
-pip install -r requirements.txt
+git clone https://github.com/Aymo-WH/algo-trading-bot.git
+cd algo-trading-bot
+pip install -r requirement-training.txt
+
+# 1. Build data (Dollar Bars, features, FFD, PCA matrices)
+python src/data_factory.py --config config/config_phase1.json
+
+# 2. Train the direction classifier, then the PPO sizer
+python src/train_agent.py --model xgb
+python src/train_agent.py --model ppo --timesteps 300000
+
+# 3. Out-of-sample evaluation
+python src/evaluate_agents.py --config config/config_phase1.json
+
+# 4. Overfitting gate (PBO via CSCV) — the deployment gate
+python src/validate_pbo.py --config config/config_phase1.json
 ```
 
-### 2. Local Configuration: 
-Ensure your .env file contains your BINANCE_API_KEY, BINANCE_SECRET, and LIVE_TRADING="TRUE".
+The notebook `TheGordian.ipynb` (kept locally; not tracked) runs the same
+pipeline cell-by-cell with explanations.
 
-### 3. Build the Data Factory (The Fuel)
-Specify your asset class (e.g., Crypto, Macro ETFs) using the dynamic config argument. This process generates datasets and fitted PCA/Scaler matrices.
-```bash
-python data_factory.py --config config/config_phase1.json
-```
+---
 
-### 4. Agent Training (`train_agent.py`)
-Provides core utilities (`train_xgb`, `train_ppo`) to programmatically initialize `TradingEnv` for specific tickers and train reinforcement learning agents using custom hyperparameter configurations.
+## ⚠️ Caveats & Known Limitations (for anyone reusing this)
 
-### 5. Headless Optimization (`research/optimize_agents.py`)
-Run headless hyperparameter optimization using Optuna. The engine loops through the specified basket of active tickers, tracking out-of-sample returns to build a True PBO matrix.
-```bash
-python research/optimize_agents.py --config config/config_phase1.json --trials 50 --timesteps 50000
-```
+- **Long-only in practice.** `act = xgb_signal × bet_size` only opens longs; a
+  short signal can exit a long but never open a short. ~40% of directional signals
+  produce no P&L.
+- **"Safe RL" reward is scaffolded, not active.** The turnover/variance/CVaR
+  penalty terms in `TradingEnv.step()` exist but their coefficients are **0** — the
+  reward is `daily_return × 100` + a 50% bonus on positive returns. The docs/paper
+  describe the intended risk-adjusted reward; it was never validated.
+- **`live_inference.py` is unvalidated.** It uses XGBoost directly (PPO not wired
+  in) and computes only the 4 microstructural features on raw time bars — a
+  train/serve mismatch vs the dollar-bar pipeline. Do not treat it as a live path.
+- **PBO is a v1 proxy.** `validate_pbo.py` uses a confidence-threshold grid on a
+  single ticker. The rigorous seed/hyperparameter ensemble was not run.
 
-### 6. Out-of-Sample Evaluation & Telemetry (`evaluate_agents.py` & `telemetry.py`)
-Evaluate models strictly on fixed chronological blocks to ensure validity. Analyze decoupled agent telemetry (Confusion Matrix, Recall, Precision, Log-Loss) and execution latency metrics.
-```bash
-python evaluate_agents.py --config config/config_phase1.json
-python telemetry.py
-```
+---
 
-### 7. Live Inference Engine (`live_inference.py`)
-The core terminal execution engine. Loads Stable-Baselines3 agents alongside ticker-specific state matrices for live, real-time execution simulation.
-```bash
-python live_inference.py --config config/config_phase1.json
-```
+## ➡️ Successor: The Vol-Gordian Project
+
+Gordian is *hard by design* — directional alpha is the hardest problem in the
+field. The natural next step uses the same engine for what the features actually
+predict — **volatility** — via volatility-managed exposure (size a position
+inversely to forecast vol; target risk-adjusted return rather than directional
+alpha). That work lives in a separate repository, **The Vol-Gordian Project**.
 
 ---
 
 ## ⚠️ Disclaimer
-**Not Financial Advice.** This repository is an open-source engineering laboratory built strictly for educational and research purposes. Do not deploy this architecture with real capital without fundamentally understanding the underlying stochastic calculus, execution limits, and transaction fee risks.
+**Not Financial Advice.** This repository is an open-source engineering laboratory
+built strictly for educational and research purposes. The directional strategy
+herein did **not** pass out-of-sample validation and must not be deployed with
+real capital.

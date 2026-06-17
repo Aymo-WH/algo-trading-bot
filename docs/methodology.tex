@@ -91,7 +91,28 @@ $$ PBO = \int_{-\infty}^{0} f(\lambda) d\lambda $$
     \item \textbf{Cloud Execution Safeguards:} Implemented memory optimization techniques (removing DataFrame copies) and absolute path resolution to ensure strict RunPod serverless stability and mitigate directory traversal vulnerabilities.
 \end{itemize}
 
+\section{Empirical Results and Project Status (June 2026)}
+Honesty about negative results is a first-class part of this record.
+
+\subsection{The Directional Signal Did Not Generalize}
+Run end-to-end on hourly Dollar Bars across seven assets with a purged train/test split, the XGBoost direction classifier showed strong in-sample statistics but \textbf{no out-of-sample edge}. Across three successive experiments the out-of-sample 15-bar win rate never exceeded $\approx 51\%$ (statistically a coin flip):
+\begin{itemize}
+    \item Four microstructural features with a random split: OOS net EV $-0.19\%$, win rate $50.8\%$.
+    \item Adding a purged, embargoed temporal split and regularization: $-1.12\%$, $49.2\%$.
+    \item Adding price/momentum/volatility/FFD features (eleven inputs): $-0.94\%$, $42.7\%$.
+\end{itemize}
+Critically, the \emph{in-sample} win rate fell from $63.6\%$ to $53.7\%$ as the leaky random split was replaced with a purged temporal split --- revealing that much of the apparent edge was a leakage artifact of shuffling autocorrelated bars.
+
+\subsection{The Overfitting Gate Confirmed It}
+Combinatorially Symmetric Cross-Validation returned $\text{PBO} = 0.65$ (a clear failure): the in-sample-best configuration ranks below the out-of-sample median in the majority of recombinations. Run-to-run summed ROI swung between roughly $-5\%$ and $+5\%$ on identical settings --- the signature of a noise-dominated signal. The gate performed exactly as designed: it falsified the strategy before any capital was committed.
+
+\subsection{Correction: the Safe RL Reward Was Scaffolded, Not Active}
+Earlier sections describe a risk-adjusted reward incorporating turnover, variance, and drawdown penalties. In the implementation these penalty coefficients were left at zero; the operative reward was $\text{daily\_return} \times 100$ with a $50\%$ bonus on positive returns. The risk-adjusted reward was never validated, and is recorded here as intended-but-unrealized design.
+
+\subsection{Diagnosis and Successor}
+The microstructural features (VPIN, Amihud Illiquidity, Kyle's Lambda, SADF) are documented predictors of \emph{volatility} and informed-flow regimes, not of short-horizon direction. The directional thesis is therefore set aside. The infrastructure --- Information-Driven Dollar Bars, FFD, Point-in-Time PCA, Triple-Barrier labeling, RL sizing, and the PBO/CSCV gate --- is sound and is carried forward into a successor project that targets volatility-managed exposure rather than directional prediction.
+
 \section{Conclusion}
-Building institutional quantitative architecture is not an exercise in avoiding failure, but in structurally harvesting it. By iteratively diagnosing and engineering solutions for data starvation, look-ahead bias, and inference state-loss, this pipeline synthesizes theoretical stochastic calculus with robust, production-grade Reinforcement Learning.
+Building institutional quantitative architecture is not an exercise in avoiding failure, but in structurally harvesting it. This pipeline succeeded as an \emph{engineering} effort: it cleanly diagnosed data starvation, look-ahead bias, and inference state-loss, and --- most importantly --- its validation gate correctly rejected a directional signal that did not survive out of sample. The directional alpha hypothesis is disproven on this universe; the reusable infrastructure, and the discipline of gating every deployment decision on PBO, are the durable results.
 
 \end{document}
