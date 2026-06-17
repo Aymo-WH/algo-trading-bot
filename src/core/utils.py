@@ -2,32 +2,35 @@ import pandas as pd
 import json
 import os
 
-_CONFIG_CACHE = None
+_CONFIG_CACHE = {}
 
-def load_config() -> dict:
+def load_config(config_path: str = 'config/config_phase1.json') -> dict:
     """
-    Loads configuration settings from config/config_phase1.json with a module-level cache.
+    Loads configuration settings from the given config JSON, cached per path.
 
-    The config.json file controls universal simulation parameters such as the transaction
-    fee percentage. Once loaded during execution, the result is cached in `_CONFIG_CACHE`
-    to prevent repetitive disk reads.
+    The config controls universal simulation parameters such as the transaction
+    fee percentage. Results are cached per path in `_CONFIG_CACHE` to prevent
+    repetitive disk reads while still allowing different configs (phase1, crypto,
+    macro) to be loaded independently within the same process.
+
+    Args:
+        config_path (str): Path to the config JSON. Defaults to config/config_phase1.json.
 
     Returns:
         dict: A dictionary of configuration parameters. Returns an empty dict if the file is missing.
     """
 
-    global _CONFIG_CACHE
-    if _CONFIG_CACHE is not None:
-        return _CONFIG_CACHE
+    if config_path in _CONFIG_CACHE:
+        return _CONFIG_CACHE[config_path]
 
     try:
-        # Assuming config.json is in the root directory relative to execution
-        with open('config/config_phase1.json', 'r') as f:
-            _CONFIG_CACHE = json.load(f)
-            return _CONFIG_CACHE
+        with open(config_path, 'r') as f:
+            cfg = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        _CONFIG_CACHE = {}
-        return _CONFIG_CACHE
+        cfg = {}
+
+    _CONFIG_CACHE[config_path] = cfg
+    return cfg
 
 def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
