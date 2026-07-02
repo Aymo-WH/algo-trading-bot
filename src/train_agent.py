@@ -1,5 +1,16 @@
 import argparse
 import os
+
+# Cap numeric-library thread pools BEFORE importing numpy/torch/numba. Inside a
+# container these libraries read the HOST core count (e.g. 128 on a 4/16-vCPU pod), so
+# each process spins up a ~128-thread pool. With SubprocVecEnv (many worker processes)
+# this oversubscribes catastrophically (load average in the hundreds -> the pod stalls
+# and drops connections). One compute thread per process is correct when parallelism
+# comes from processes, not threads. Shell-provided values take precedence.
+for _thread_var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                    "NUMEXPR_NUM_THREADS", "NUMBA_NUM_THREADS"):
+    os.environ.setdefault(_thread_var, "1")
+
 import pandas as pd
 from core.trading_gym import TradingEnv
 from core.utils import pca_feature_columns
@@ -48,6 +59,20 @@ def set_global_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+def usable_cpu_count():
+    """
+    Returns the number of CPU cores actually available to this process.
+
+    multiprocessing.cpu_count() returns the HOST core count inside a container
+    (e.g. 128 on a 4-vCPU cloud pod), which would spawn far too many
+    SubprocVecEnv workers and exhaust memory. os.sched_getaffinity respects the
+    cgroup cpuset limit; fall back to cpu_count() on platforms without it.
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:  # e.g. Windows / no affinity API
+        return multiprocessing.cpu_count()
 
 def parse_args():
     """
@@ -153,7 +178,7 @@ def main():
     print(f"Model will be saved to: {save_path}")
 
     if args.model == "ppo":
-        n_cpu = max(1, multiprocessing.cpu_count() - 1)
+        n_cpu = max(1, min(usable_cpu_count() - 1, 8))
         vec_env_cls = DummyVecEnv if n_cpu == 1 else SubprocVecEnv
         print(f"Igniting {n_cpu} parallel environment(s) for PPO training (using {vec_env_cls.__name__})...")
 
@@ -323,7 +348,7 @@ def train_ppo(ticker, total_timesteps=300000, **kwargs):
     is_discrete = False
     data_dir = "data/train/"
 
-    n_envs = max(1, multiprocessing.cpu_count() - 1)
+    n_envs = max(1, min(usable_cpu_count() - 1, 8))
     vec_env_cls = DummyVecEnv if n_envs == 1 else SubprocVecEnv
 
     ticker_file = os.path.join(data_dir, f"{ticker}_data.csv")
