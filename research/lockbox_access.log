@@ -1,0 +1,2 @@
+2026-07-07T14:46:02.102248 BLOCKED Read: '/workspace/algo-trading-bot/data/lockbox/holdout.enc   '
+2026-07-07T14:46:02.145788 BLOCKED Bash: '   cat data/lockbox/holdout.enc'

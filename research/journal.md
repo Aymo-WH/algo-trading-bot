@@ -88,3 +88,21 @@ Full report retained in `research/v1_forensics.md`. Headlines:
   data statistics only, no strategy P&L anywhere).
 - **Next:** operator approval of design → Phase 0 (referee + lockbox + hooks/skills/
   auditor). No alpha work before the referee is green.
+
+## 2026-07-07 — Design APPROVED; Phase 0 begins
+
+- Operator approved the design ("ok, u may proceed"), delegated final architectural
+  authority, and restated the end goal (real profit, no hallucination/synthetic-data
+  reporting/overfitting) — consistent with the mission contract: honest OOS profit or
+  a rigorous null; synthetic data used only to calibrate the referee, never to report
+  performance. Decisions D3–D9 now ACTIVE; `specs/DESIGN-v2-2026-07-07.md` FROZEN.
+- Git identity for this repo switched to the personal account (Aymo-WH
+  <khoowiheng@hotmail.com>); the 5 unpushed commits rewritten accordingly
+  (filter-branch over origin/main..HEAD).
+- **Phase 0 build order:** (0.1) .claude/ runtime guardrails — quarantine hook,
+  read-only auditor agents, /preregister /run-validation /promote skills;
+  (0.2) validation/ package: purged splits + CPCV; (0.3) metrics (Sharpe/PSR/DSR/
+  effective-N) + CSCV on real trial matrices; (0.4) panel backtester + auto-logging
+  ledger; (0.5) synthetic null/planted-signal generators + canary suite + referee
+  power/size validation; (0.6) lockbox + token-gated final_eval; then freeze
+  validation/ (validation/.frozen) and run the full referee self-test.

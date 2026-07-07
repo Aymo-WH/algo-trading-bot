@@ -22,5 +22,8 @@ Thumbs.db
 CLAUDE.md
 FABLE_MISSION.md
 gordian-project-knowledge.md
-.claude/
+# .claude/ guardrails (hooks/agents/skills) ARE tracked: integrity infrastructure
+# must survive a fresh checkout. Only local overrides stay untracked.
+.claude/settings.local.json
 data/recon/
+data/lockbox/
