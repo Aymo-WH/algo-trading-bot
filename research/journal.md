@@ -68,3 +68,23 @@ Full report retained in `research/v1_forensics.md`. Headlines:
 - Gym seeding broken (module-level `random`, identical state across vec workers) → FIX.
 - Cost model: 1bp/side in phase1 config, no spread/slippage → FIX for v2.
 - Thread-cap/CPU-affinity pattern in train_agent.py → REUSE verbatim.
+
+## 2026-07-07 — R2a/R2b evidence briefs + R4 architecture decision
+
+- R2a (validation canon) saved to `research/validation_methodology.md`: exact CSCV
+  (S=16), DSR with effective-N, CPCV N=8/k=2, purge 5d + embargo 10d, canary designs
+  for cross-sectional strategies (within-date label shuffle is the primary control),
+  IC testing with Newey-West. Flagged source disagreements recorded.
+- R2b (ETF evidence) saved to `research/evidence_etf_cross_section.md`: effective
+  breadth 5–10 per literature (matches our measured 10–17); carry > trend > low-beta >
+  seasonality; reversal/lead-lag contradicted at ETF level; realistic multi-style net
+  Sharpe ~0.7 ceiling (AQR); 5–10 bps/side blended costs; momentum-crash and
+  correlation-spike failure modes.
+- **R4 verdict: CONFIRM the market-neutral cross-sectional chassis, REFINE the parts.**
+  Full proposal in `research/design.md`; pre-registration frozen in
+  `specs/DESIGN-v2-2026-07-07.md`; decisions D3–D9 logged. Trial budget ≤250,
+  kill criteria K1–K4, audit triggers 1.2/1.5 pre-registered.
+- `research/experiments.jsonl` initialized (empty — no trials run; Phase R computed
+  data statistics only, no strategy P&L anywhere).
+- **Next:** operator approval of design → Phase 0 (referee + lockbox + hooks/skills/
+  auditor). No alpha work before the referee is green.
