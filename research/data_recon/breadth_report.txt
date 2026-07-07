@@ -1,0 +1,11 @@
+Effective-breadth report (returns through 2021-12-31 ONLY)
+
+2007-01-01..2021-12-31: N=73 tickers, 3704 common days | participation ratio (effective N) = 2.9 | PCs for 90% var = 18 | top-1 PC share = 57.7%
+2012-01-01..2021-12-31: N=77 tickers, 2517 common days | participation ratio (effective N) = 3.4 | PCs for 90% var = 20 | top-1 PC share = 52.6%
+2017-01-01..2021-12-31: N=77 tickers, 1259 common days | participation ratio (effective N) = 3.2 | PCs for 90% var = 19 | top-1 PC share = 54.8%
+
+Residual effective-breadth (pre-holdout <=2021-12-31 only)
+
+2007-01-01: N=73 | PR(raw)=2.9 | PR(residual, top-1 PCs removed)=16.8 | PR(residual, top-3 PCs removed)=21.0 | PR(residual, top-5 PCs removed)=21.9 | PR(cross-sectionally demeaned)=9.4
+2012-01-01: N=77 | PR(raw)=3.4 | PR(residual, top-1 PCs removed)=16.3 | PR(residual, top-3 PCs removed)=19.7 | PR(residual, top-5 PCs removed)=20.8 | PR(cross-sectionally demeaned)=10.0
+2017-01-01: N=77 | PR(raw)=3.2 | PR(residual, top-1 PCs removed)=16.5 | PR(residual, top-3 PCs removed)=19.5 | PR(residual, top-5 PCs removed)=19.5 | PR(cross-sectionally demeaned)=9.1
