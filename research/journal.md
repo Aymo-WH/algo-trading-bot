@@ -253,3 +253,11 @@ validation/ edits, commit + push the freeze.
   the box). Also propose the M4 v3-spec (S1 per-gate null assertions) for approval.
 - No real-data trials run; research/experiments.jsonl still empty. Trial budget (≤250)
   untouched.
+
+## 2026-07-08 — Operator TODOs confirmed done; PR opened; Phase 1 NOT started
+
+- Operator reports (same day): stale pre-D12 lockbox artifacts deleted and the pasted
+  PAT revoked (I cannot verify the lockbox paths directly — hook-blocked by design;
+  recorded as operator-reported). Hook-tightening (L1) remains at operator discretion.
+- Operator instruction: do NOT start Phase 1 yet; open a PR for easy retrieval.
+- Session ends with Phase 0 complete, referee frozen, branch fully pushed.
