@@ -229,3 +229,27 @@ tests/fast -q` → **39 passed in 10.19s** (calibration paths untouched since th
 
 Phase 0 close: commit + push, create `validation/.frozen`, verify the guard blocks
 validation/ edits, commit + push the freeze.
+
+## 2026-07-08 — validation/ FROZEN. Phase 0 COMPLETE.
+
+- Phase 0.6 committed as **82024e2** and pushed (14 files, 1003 insertions).
+- Created `validation/.frozen`, then VERIFIED the freeze: a probe Edit to
+  validation/__init__.py was denied by the quarantine guard with the FROZEN message
+  (raw hook output in this session). The referee can no longer be modified without the
+  operator removing the marker after a logged approval.
+- **Phase 0 deliverable met (mission §5):** a tested referee — purged CPCV splits,
+  Sharpe/PSR/DSR with effective-N, CSCV/PBO on real trial matrices, panel backtester
+  with auto-logging ledger, five canaries, synthetic null/planted calibration proving
+  size AND power, cryptographic lockbox, token-gated one-shot final_eval — 53/53 green
+  under pre-registered acceptance criteria, adversarially reviewed.
+- **Operator TODOs before Phase 1 lockbox build:** (1) delete the stale pre-D12 draft
+  lockbox: data/lockbox/holdout.enc, /workspace/.gordian_lockbox_key,
+  /workspace/OPERATOR_TOKEN.txt; (2) optionally tighten the guard's final_eval
+  allowlist (L1) — hook edits are operator-only; (3) revoke the GitHub PAT pasted into
+  the 2026-07-08 session transcript (a stored credential already works).
+- **Next session = Phase 1 (data & universe layer):** yfinance daily panel for the D9
+  universe (69 ETFs), PIT entry rule, data-integrity test suite, holdout slice
+  encrypted into a FRESH lockbox at build time (train/val in the clear, 2022+ only in
+  the box). Also propose the M4 v3-spec (S1 per-gate null assertions) for approval.
+- No real-data trials run; research/experiments.jsonl still empty. Trial budget (≤250)
+  untouched.
