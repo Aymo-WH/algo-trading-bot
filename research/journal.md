@@ -261,3 +261,7 @@ validation/ edits, commit + push the freeze.
   recorded as operator-reported). Hook-tightening (L1) remains at operator discretion.
 - Operator instruction: do NOT start Phase 1 yet; open a PR for easy retrieval.
 - Session ends with Phase 0 complete, referee frozen, branch fully pushed.
+- PR for retrieval: https://github.com/Aymo-WH/algo-trading-bot/pull/185 (branch reconnected
+  to the rewritten main via merge 8943fe2; tree verified byte-identical to 1eb2d70;
+  conflicts resolved keeping ours — .gitignore guardrail entries + the train_agent.py
+  thread-cap fix the rewritten main had lost).
