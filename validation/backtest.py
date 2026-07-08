@@ -6,8 +6,12 @@ the position earns ``asset_returns`` starting at t+1 (enforced by shift(1) —
 never hand this function pre-shifted weights).
 
 Costs: per-side proportional costs on turnover |Δw|, charged when trading.
-Every call appends a row to the experiment ledger unless log=False is passed
-WITH a reason (canary/self-test internals) — nothing runs uncounted (§3.4).
+
+Ledger discipline (§3.4): ``backtest_panel`` is the pure engine and does not
+log; the logging entry points are ``run_and_log`` here and
+``validation.run_battery.run_battery`` — every strategy configuration
+evaluated on REAL data must flow through one of those, so nothing runs
+uncounted. (Referee self-tests on synthetic panels use throwaway ledgers.)
 """
 import numpy as np
 import pandas as pd

@@ -59,6 +59,28 @@ def effective_trials(n_trials: int, mean_corr: float) -> float:
     return rho + (1.0 - rho) * n_trials
 
 
+def mean_pairwise_correlation(M: np.ndarray | None) -> float:
+    """Mean off-diagonal correlation across trial return columns (T×N).
+
+    Feeds effective_trials(); estimated from the same persisted trial return
+    matrix CSCV uses. Returns 0.0 (conservative: maximal deflation, N̂ = M)
+    when no matrix, < 2 usable columns, or degenerate columns.
+    """
+    if M is None:
+        return 0.0
+    M = np.asarray(M, dtype=float)
+    if M.ndim != 2 or M.shape[1] < 2 or M.shape[0] < 3:
+        return 0.0
+    sd = np.nanstd(M, axis=0)
+    valid = M[:, sd > 0]
+    if valid.shape[1] < 2:
+        return 0.0
+    C = np.corrcoef(valid.T)
+    off = C[np.triu_indices_from(C, k=1)]
+    off = off[~np.isnan(off)]
+    return float(off.mean()) if len(off) else 0.0
+
+
 def dsr(sr_hat: float, trial_sr_variance: float, n_trials: float, n_obs: int,
         skew: float = 0.0, kurt: float = 3.0) -> float:
     """Deflated Sharpe Ratio = PSR with sr_ref = E[max SR under the null].
@@ -87,7 +109,8 @@ def dsr_from_ledger(returns: np.ndarray, trial_sharpes: np.ndarray,
     kurt = float(stats.kurtosis(r, fisher=False)) if len(r) > 3 else 3.0
     value = dsr(sr_hat, var_sr, n_eff, len(r), skew, kurt)
     return {"dsr": value, "sr_hat": sr_hat, "n_trials": len(trial_sharpes),
-            "n_effective": n_eff, "trial_sr_variance": var_sr,
+            "n_effective": n_eff, "trial_corr_mean": float(trial_corr_mean),
+            "trial_sr_variance": var_sr,
             "sr0_expected_max": expected_max_sharpe(n_eff, var_sr),
             "skew": skew, "kurt": kurt, "n_obs": len(r)}
 
