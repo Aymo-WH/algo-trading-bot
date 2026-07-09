@@ -7,6 +7,8 @@
 > volatility-based strategies continues in the successor project,
 > **The Vol-Gordian Project**.
 
+**Recent engineering note (3 Jul 2026):** train_agent.py previously read the host's CPU count inside the training container (e.g. 128 cores on a 4/16-vCPU pod), spawning ~127 PPO workers and ~1900 numeric-library threads. Fixed via os.sched_getaffinity and by pinning OMP/MKL/OpenBLAS/NUMEXPR/NUMBA thread pools to 1 per worker process. Infrastructure fix only; does not change research findings below.
+
 This repository implements an institutional-style algorithmic-trading research
 pipeline rooted in Marcos López de Prado's financial-machine-learning methods.
 Its goal was a dual-agent meta-labeling system: an **XGBoost** classifier for
