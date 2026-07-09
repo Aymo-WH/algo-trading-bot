@@ -372,3 +372,42 @@ Phase 1 is COMPLETE: data & universe layer built, integrity-tested, lockbox fres
 zero strategy trials logged. Next session = Phase 2 (signal library): pre-register
 each Tier-1 signal's IC test per design §5 before computing ANY IC on real data —
 those are the first rows that count against the 250-trial budget.
+
+## 2026-07-09 — Session resume: model switched to Sonnet 5, agents re-pinned, §3.6 amended
+
+Context restoration for this turn: operator reports OPERATOR_TOKEN.txt secured
+off-pod and deleted from /workspace (guard-blocked from verifying directly — taken
+as reported, same as the Phase-0 stale-lockbox TODO). Two operator commits found
+already on the branch and pushed to origin: `d2daab1` (leak-hunter/reviewer pinned
+to `model: claude-fable-5` in their agent frontmatter — verified by reading both
+files) and `eff8e16` (D21: holdout.enc committed for durability, ciphertext-only).
+FABLE_MISSION.md §3.6 confirmed to now include the pre-run duration-estimate rule
+(grep'd the live file, lines 184-190) — will apply it before any non-trivial run
+starting with the Phase-2 IC computation.
+
+**Interstitial: flaky test fixed (D22).** Before starting Phase 2, a PostToolUse
+hook run (triggered by an unrelated scratchpad file write) surfaced
+`tests/fast/test_lockbox.py::test_round_trip_and_no_plaintext_at_rest` FAILING:
+`assert b"SPY" not in enc` tripped because Fernet's per-call random IV produced
+ciphertext that happened to contain the 3-byte substring "SPY" by coincidence.
+Root-caused with evidence before touching anything:
+`for i in 1..8: pytest tests/fast/test_lockbox.py::test_round_trip_and_no_plaintext_at_rest -q`
+→ **8/8 passed** on the UNMODIFIED test (confirms non-determinism, not a logic bug).
+Fixed by dropping the redundant, collision-prone short-substring check and keeping
+the collision-safe `PLAINTEXT not in enc` (~40 bytes — negligible coincidental-match
+probability), which is exactly S4a's pre-registered criterion ("no plaintext holdout
+bytes on disk") word for word. Re-verified: `pytest tests/fast/test_lockbox.py -q`
+×5 → **4 passed** each time; `pytest tests/fast tests/data -q` → **53 passed in
+5.26s**. Logged as D22, flagged for operator review since the file is part of the
+Phase-0 evidence bundle even though it sits outside validation/'s mechanical freeze.
+
+## 2026-07-09 — Phase 2 begins: EXP-001 pre-registered (Tier-1 signal IC screen)
+
+Per design.md §5 / mission §8, pre-registered BEFORE computing any IC on real data:
+`specs/EXP-001-tier1-signal-ic.md` — four signals (S1 XS momentum, S2 TS trend, S3
+low-beta, S4 seasonality), each a single fixed construction already specified in the
+operator-approved design.md (no hyperparameter search), the graduation rule already
+coded in `validation/ic.py` (mean IC ≥0.01, NW t≥2.0, ≥60% years positive),
+train/validation only (1999-12-22..2021-12-31). 4 planned trials — the first real
+usage of the 250-trial budget (Phase 0/1 rows are preregistered/data_build/
+throwaway-synthetic, none countable per D14).

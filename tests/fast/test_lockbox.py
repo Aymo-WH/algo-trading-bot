@@ -18,7 +18,14 @@ def test_round_trip_and_no_plaintext_at_rest(tmp_path):
     enc_path = build_lockbox(PLAINTEXT, **kw)
     token = (tmp_path / "tok.txt").read_text().strip()
     enc = open(enc_path, "rb").read()
-    assert b"SPY" not in enc and PLAINTEXT not in enc      # encrypted at rest
+    # Fernet uses a fresh random IV per call, so ciphertext is high-entropy;
+    # checking the FULL plaintext (below) has negligible collision odds, but
+    # a short fixed substring (e.g. "SPY", 3 chars) can coincidentally appear
+    # in ~140 random base64 chars ~1/1900 of the time — a real flake, hit on
+    # 2026-07-09 (see journal). Keep only the collision-safe full-plaintext
+    # check; it is exactly S4a's criterion ("no plaintext holdout bytes on
+    # disk") and is not weakened by dropping the redundant short check.
+    assert PLAINTEXT not in enc                            # encrypted at rest
     out = open_lockbox(token, lockbox_dir=kw["lockbox_dir"],
                        access_log=kw["access_log"])
     assert out == PLAINTEXT                                # byte-identical
