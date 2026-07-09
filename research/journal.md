@@ -351,3 +351,24 @@ Hook edits are operator-only by design — I cannot and will not make this chang
 approve/decline the M4 v3 spec; decide L1 timing; optional: commit holdout.enc for
 durability (I am guard-blocked from staging data under the lockbox dir and won't
 work around it).
+
+## 2026-07-09 — Operator decisions (D20); M4 v3 ACTIVE and green
+
+Operator answered the in-session question (same mechanism as D15), logged as **D20**:
+(1) **M4 v3 APPROVED — activate now**; (2) **L1: secure the token only**, hook-edit
+deferred (documented residual risk accepted; revisit before Phase 6); (3) **D16
+ratified** — universe is 70-by-rule; D16 status cell updated to point at D20.
+
+M4 implementation per the activated spec: S1c/S1d/S1e added to
+tests/referee/test_referee_calibration.py::test_size_null_panels_pass_nothing
+(three assert lines + docstring reference; no referee code, no thresholds). Re-run:
+`/workspace/venv/bin/python -m pytest tests/referee/test_referee_calibration.py -q -rA`
+→ **2 passed in 1452.08s (0:24:12)** (S1 incl. the new per-gate null assertions; S2
+re-verified unchanged). Raw output in session task boh8eyc81 (run survived a session
+restart; verified by waiting on the live pytest PID). Combined with the 71 fast+data
+tests earlier today, the whole suite is green at this commit.
+
+Phase 1 is COMPLETE: data & universe layer built, integrity-tested, lockbox fresh,
+zero strategy trials logged. Next session = Phase 2 (signal library): pre-register
+each Tier-1 signal's IC test per design §5 before computing ANY IC on real data —
+those are the first rows that count against the 250-trial budget.

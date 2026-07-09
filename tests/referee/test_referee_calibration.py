@@ -2,9 +2,10 @@
 synthetic no-edge and known-edge panels). Acceptance criteria are
 pre-registered in specs/REFEREE-SELFTEST-2026-07-08.md as amended by
 specs/REFEREE-SELFTEST-2026-07-08-v2.md (S2 grid + effective-N DSR; logged
-operator approval) and may not be adjusted to pass. All trials land in
-throwaway ledgers (never the real one — synthetic calibration does not feed
-the DSR count, decision D14)."""
+operator approval) and specs/REFEREE-SELFTEST-2026-07-09-v3.md (per-gate S1
+null assertions S1c/S1d/S1e; operator approval logged as decision D20) and
+may not be adjusted to pass. All trials land in throwaway ledgers (never the
+real one — synthetic calibration does not feed the DSR count, decision D14)."""
 import json
 
 import numpy as np
@@ -73,6 +74,12 @@ def test_size_null_panels_pass_nothing(tmp_path, throwaway_ledger):
     fails = [json.dumps(r["gates"], default=str) for r in results]
     assert all(not r["all_gates_passed"] for r in results), fails      # S1a
     assert sum(r["gates"]["net_sharpe"] for r in results) <= 1, fails  # S1b
+    # v3 spec (operator approval D20): rejection may not hinge on the
+    # single-trial-store PBO leg, and the size gates hold per-gate.
+    assert all(not all(v for k, v in r["gates"].items() if k != "pbo")
+               for r in results), fails                                # S1c
+    assert sum(r["gates"]["dsr"] for r in results) == 0, fails         # S1d
+    assert sum(r["gates"]["survives_10bps"] for r in results) <= 1, fails  # S1e
     assert len(vledger.read_ledger()) == len(NULL_VARIANTS)            # S3
 
 
