@@ -26,4 +26,3 @@ gordian-project-knowledge.md
 # must survive a fresh checkout. Only local overrides stay untracked.
 .claude/settings.local.json
 data/recon/
-data/lockbox/
