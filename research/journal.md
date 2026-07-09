@@ -316,3 +316,38 @@ calibration battery was NOT re-run: validation/ and tests/referee are byte-ident
 to the frozen 53/53-green commit (git status clean on those paths); its Phase-0
 evidence stands. Phase-1 code touched only new files (src/panel_factory.py,
 tests/data/).
+
+## 2026-07-09 — M4 v3-spec PROPOSED; L1 re-flagged with a sharper threat model
+
+**M4 (deferred from Phase 0):** per-gate S1 null assertions drafted as
+`specs/REFEREE-SELFTEST-2026-07-09-v3.md`, **status PROPOSED — not active** until an
+operator-approval row lands in decisions.md (the D15 mechanism; the spec file itself
+is frozen at proposal time by the guard). Assertion values are MEASURED, not
+intuited: dry-run of the 6 S1 null variants on the frozen referee
+(research/m4_dryrun/, D14 throwaway ledger; determinism cross-check: v3 net Sharpe
++0.7226 matches the Phase-0 record). Proposed: S1c non-vacuous rejection (all 6
+rejected even with the PBO leg masked — measured 6/6, worst case rejected by DSR
+alone), S1d DSR passes 0/6 (max null DSR 0.7943), S1e survives_10bps ≤ 1/6. Explicit
+non-assertions pre-registered for canaries / max_drawdown / years_positive (canaries
+detect leakage, not null edge — all 6 null variants correctly pass them; a future
+"tightening" there would be miscalibrated). Implementation upon approval = three
+assert lines in the S1 test; no referee code, no thresholds.
+
+**L1 (operator-discretion, re-flagged with higher urgency):** the guard's final_eval
+allowlist matches by SUBSTRING — any bash command merely containing the string
+"validation/final_eval.py" (e.g. in a trailing comment) bypasses the lockbox-token
+block entirely, for ANY action in that command. Post-D12 the token IS the Fernet
+key, and since today's Phase-1 build a FRESH token exists at the canonical path
+until the operator secures it — during that window the substring rule is the only
+mechanical barrier between an agent command and the decryption key (deliberate
+misuse would still land in lockbox_access.log as ALLOWED, but auditable ≠ blocked).
+Recommendation to operator: (1) retrieve + secure the token file NOW; (2) tighten
+the allowlist to an anchored exact invocation, e.g.
+`^/workspace/venv/bin/python validation/final_eval\.py --provider \S+ --config \S+
+--prices \S+ --operator-token \S+( --out \S+)?$` with no shell metacharacters.
+Hook edits are operator-only by design — I cannot and will not make this change.
+
+**Open for operator:** ratify D16 (universe 70-by-rule vs design.md's miscounted 69);
+approve/decline the M4 v3 spec; decide L1 timing; optional: commit holdout.enc for
+durability (I am guard-blocked from staging data under the lockbox dir and won't
+work around it).
