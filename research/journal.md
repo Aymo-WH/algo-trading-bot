@@ -265,3 +265,54 @@ validation/ edits, commit + push the freeze.
   to the rewritten main via merge 8943fe2; tree verified byte-identical to 1eb2d70;
   conflicts resolved keeping ours — .gitignore guardrail entries + the train_agent.py
   thread-cap fix the rewritten main had lost).
+
+## 2026-07-09 — Phase 1: data & universe layer built and green
+
+**Context restoration verified before any work:** journal tail + decisions D1–D15 read;
+`validation/.frozen` present (357 bytes, 2026-07-08); freeze probe re-run — an Edit to
+validation/__init__.py was DENIED by the quarantine guard with the FROZEN message (raw
+hook output in this session). Branch fast-forwarded to origin (b3d51f9).
+
+**Universe resolution (D16).** Applying the frozen D9 rule to the committed
+universe_summary.csv: `status=='OK' and median_dollar_vol_3y_musd >= 10.0` → **70
+names** (dropped thin/dead: DBA, EWM, EWS, EZA, FXE, FXY, RSX, TUR). design.md §2's
+"69" is internally inconsistent (headline 69, exclusion arithmetic 70, category sum
+68) — the rule wins, discrepancy logged, operator ratification requested. Command +
+output in this session (pandas recount of the committed CSV).
+
+**Panel cut (`src/panel_factory.py`, one-shot semantics like the lockbox):**
+`/workspace/venv/bin/python src/panel_factory.py` — yfinance 1.5.1, 70 tickers,
+period=max, daily auto-adjusted; smoke-tested SPY+EPI 3mo first (data through
+2026-07-09 confirmed).
+- calendar = SPY-traded sessions; PIT entry = 252nd observed day; rebalance =
+  first trading day ≥ Wednesday per ISO week; **panel_start = 1999-12-22** (first
+  rebalance with ≥ 20 eligible — matches design's "~2000" expectation).
+- train/val IN THE CLEAR, full history from 1993-01-29 → **2021-12-31** (7285×70):
+  trainval_close fbb7ed23…, trainval_volume 733dc41d…, eligibility 7b574dac…
+  (full SHA-256 in data/panel/MANIFEST.json, committed).
+- **FRESH lockbox built**: holdout close panel 2022-01-01 → 2026-06-30 (1126×70),
+  plaintext sha256 6e627d498b2b8e74… recorded in the manifest (tamper-evidence at
+  final eval), encrypted to data/lockbox/holdout.enc; plaintext never touched disk.
+  The clean build itself verifies the operator's stale-artifact deletion
+  (build_lockbox raises FileExistsError otherwise). **Operator token written to the
+  canonical path — operator must retrieve and secure it now.**
+- Stale Phase-R clear caches deleted (data/recon/prices_{close,volume}.csv held
+  2022+ closes); a data-integrity test now enforces their absence.
+- Build logged to research/experiments.jsonl as phase="data_build"
+  (id=PHASE1-PANEL-BUILD) — excluded from trial_count()/DSR by construction and
+  tested as such. **Zero strategy trials run to date; trial budget 250 untouched.**
+
+**Data-integrity suite (`tests/data/`, 20 tests):** PIT no-look-ahead asserted
+literally (truncating the future never changes the past), eligibility monotone +
+recomputable from the artifact, boundary tests (nothing after 2021-12-31 in ANY
+clear csv under data/), universe columns exact, calendar integrity, split-outlier
+scan (max |1d return| < 0.60), manifest-hash-vs-disk, referee-constant cross-check
+(panel boundaries == validation.final_eval's), ledger-exclusion test. One test bug
+found+fixed during bring-up (pandas 3.x stack() keeps NaN → positivity check needed
+dropna; data itself was fine).
+`pytest tests/fast tests/referee/test_final_eval.py tests/referee/test_canaries.py
+tests/referee/test_cscv_ic.py tests/data -q` → **71 passed in 93.85s**. The 27-min
+calibration battery was NOT re-run: validation/ and tests/referee are byte-identical
+to the frozen 53/53-green commit (git status clean on those paths); its Phase-0
+evidence stands. Phase-1 code touched only new files (src/panel_factory.py,
+tests/data/).
