@@ -249,4 +249,7 @@ def test_build_logged_but_excluded_from_dsr_trial_count(panel):
     from validation.ledger import read_ledger, trial_count
     rows = [r for r in read_ledger() if r.get("phase") == "data_build"]
     assert len(rows) == 1 and rows[0]["id"] == "PHASE1-PANEL-BUILD"
-    assert trial_count() == 0, "data build must not inflate the DSR trial count"
+    result_rows = [r for r in read_ledger() if r.get("phase") in ("trial", "result")]
+    assert trial_count() == len(result_rows), "trial_count() must reflect only trial/result rows"
+    assert not any(r.get("id") == "PHASE1-PANEL-BUILD" for r in result_rows), \
+        "data build must not inflate the DSR trial count"
