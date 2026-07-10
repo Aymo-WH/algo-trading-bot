@@ -534,3 +534,50 @@ the combiner (M0 z-score composite per design §6) — **use the now-available r
 `design-reviewer` subagent directly** (not the substitute) to weigh in on which of
 (a)/(b) to pursue before building anything. Either way: pre-register before touching
 real data again, same as every step this session.
+
+## 2026-07-10 — Session resume: pod recreated, D22 open item + stale test resolved (D24)
+
+Context restoration per the new startup protocol: read CLAUDE.md, FABLE_MISSION.md,
+journal tail, decisions.md through D23 — confirmed clean tree at c11d9d3, matching
+operator's report of a pod recreation (RunPod host out of vCPU) onto the same network
+volume/commit, fresh container.
+
+**Item 1 — failing test triaged.** Operator ran the canary/referee suite manually
+pre-session: 84 passed, 1 failed —
+`tests/data/test_panel_integrity.py::test_build_logged_but_excluded_from_dsr_trial_count`
+(asserted `trial_count() == 0`). Independently confirmed (not taking the operator's
+read as ground truth): `trial_count()` (validation/ledger.py:65) counts
+`phase in ("trial","result")`; the ledger has 4 real `result` rows from EXP-001 (D23),
+legitimately logged after this test was written in the Phase-1 commit (84929f2),
+*before* EXP-001 existed. Stale assertion, not a leak — its own first assert already
+shows the real intent (the data-build row is excluded by phase, not "ledger is empty
+forever").
+
+**Item 2 — fresh-context reviewer sign-off obtained BEFORE editing** (writer≠verifier,
+mission §8): reviewer independently re-derived the same diagnosis from git history +
+code, found no defect in `trial_count()==4`, and endorsed the proposed fix with one
+amendment (`r["id"]` → `r.get("id")` to avoid a KeyError masking the real check).
+Applied with the amendment: re-derives the expected count from the ledger and asserts
+the build-row id is absent from counted rows, instead of hardcoding a count that goes
+stale as the ledger legitimately grows. `pytest tests/data/test_panel_integrity.py -q`
+→ **20 passed**. Verdict logged to `research/audit_log.jsonl` (first entry — the
+audit_gate hook itself was only added in the prior session's last commit, c11d9d3).
+Committed + pushed as **1b8e02f**.
+
+**Item 3 — D22 (prior unilateral lockbox test fix) ruled on by the operator.**
+Presented the diff/rationale; operator chose **revert-and-redo** (not ratify-as-is)
+over ratify+retroactive-review — see **D24**. Reverted the working-tree assertion to
+the pre-fix state, sent to a fresh-context reviewer for sign-off *before* any commit
+this time (closing the exact process gap D22 exposed). The reviewer independently
+reproduced the coincidental-substring flake from scratch (200k direct Fernet
+encryptions: 102 hits, ~1/1960, matches ~1/1900 theory) and found a stronger argument
+than the original: `PLAINTEXT` contains `\n` (0x0A), outside Fernet's urlsafe-base64
+output alphabet, so the retained `PLAINTEXT not in enc` check is deterministically
+collision-proof, not merely low-probability. Fix content ends up byte-identical to the
+original f78e1d1 change — nothing to recommit (`git checkout --` restored it; working
+tree clean against HEAD). Verdict logged to `research/audit_log.jsonl`. D22 marked
+"active" (ratified) via D24; process gap closed.
+
+**No new alpha/Phase-2/3 work has started this session** — items 1–3 above and the
+pending redesign consult (item 4, S1/S2 breadth question) are the operator's explicit
+gate before anything else proceeds.
