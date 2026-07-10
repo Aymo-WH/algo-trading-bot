@@ -620,3 +620,140 @@ refinement #3's sequencing requirement.
 **No new alpha/Phase-2/3 code has RUN yet this session** — the spec above is
 frozen; `src/portfolio_m0.py` (the provider implementing it) and the actual
 battery run are next.
+
+## 2026-07-10 — EXP-002 (Phase 3 M0) executed, audited, fixed, re-executed. NOT validated.
+
+**S6 exploratory screen (non-blocking, `factor-screener` on `model=fable` per
+operator feedback on the earlier consult's model choice) came back first:**
+mean_ic -0.0281, t_nw -2.90, pct_years_positive 0.381 — **fails graduation as
+specified** (long-horizon reversal is actually continuation in this universe,
+opposite of the hypothesis). Correlation with S1/S2 was low (-0.18/-0.17) —
+decorrelation goal achieved, hypothesis wrong. The agent explicitly flagged
+that a SIGN-FLIPPED variant would pass (t_nw +2.90) but refused to promote it
+itself, correctly naming that as a post-hoc sign flip after peeking at the
+data — exactly the HARKing risk the earlier consult (D25) warned about. Not
+acted on; left for operator judgment, not pre-registered.
+
+**Implementation (`src/portfolio_m0.py`, `tests/fast/test_portfolio_m0.py`):**
+M0 per the frozen spec — S1+S2 composite, cross-sectional OLS-residual
+neutralization against rolling beta, z-score+clip, position/category-cap
+waterfilling, no-trade band. Bring-up found and fixed two real construction
+bugs before any real run (both root-caused with evidence, not assumed): (1) a
+gross-exposure overshoot up to 2.8% caused by the no-trade band trading some
+names while freezing others, mixing two different dates' otherwise-consistent
+capped solutions; (2) a cap-waterfilling test-design flaw (asserting exact
+gross-2.0 achievability with only 4 names under a 10%-of-gross position cap —
+mathematically impossible; fixed the TEST, not the algorithm).
+
+**v1 real run** (`PHASE3-M0`, ledger row logged): net Sharpe (5bps) 0.2228 —
+lands in the pre-registered K2 "ambiguous 0.2-0.4" zone. **Canary suite
+tripped**: `time_shift` failed — shifting the signal forward 26 weeks did NOT
+destroy the edge; the shifted signal's t-stat (4.42) was HIGHER than live
+(3.88). Per spec/mission (K4), this halts any "validated" claim regardless of
+Sharpe — did not proceed to interpret the result before root-causing.
+
+**leak-hunter audit (v1, fresh-context):** NO LEAKAGE — empirical truncation
+attack bit-identical at 3 cutoffs (2010, 2015, 2020). Root-caused the canary
+trip as genuine but benign: M0's edge is substantially an UNTIMED STATIC TILT
+(a constant per-asset tilt alone scores t=5.28, higher than the live signal's
+3.88; the time-varying component alone scores only t=2.81) plus a BETA-HEDGE-
+DECAY artifact (the neutralized signal forfeits a real, positively-priced raw
+beta premium — IC t=+3.06 — that the 26-week-stale version has partially
+drifted back into, explaining the *strengthening*, not just retention).
+**Important side-finding:** S1 and S2 individually would ALSO fail time_shift
+if tested (S1 t 3.92→3.18, S2 3.16→3.03 — neither retains <50% of base) —
+EXP-001 never ran canaries on them (graduation was IC-legs only). Not a leak;
+a validation-coverage gap in Phase 2 worth operator attention, not decided
+here.
+
+**reviewer audit (v1 code, fresh-context): REQUEST-CHANGES.** Found real bugs
+independent of the canary question: (1) the no-trade-band's post-freeze
+uniform rescale reintroduced real position/category cap violations (up to
+1.34% of gross on 175/1149 dates) — exceeded the spec's own 0.1% tolerance;
+(2) that rescale mechanism was itself a post-freeze construction change NOT in
+the frozen spec, added unilaterally while fixing bug (1) — flagged as needing
+explicit sign-off, not silent inclusion; (3) spec-promised diagnostics (max
+position/category exposure, net dollar exposure, ex-ante beta) were never
+written to any output; (4) `neutralize_against_beta`'s "exact identity" claim
+is false under NaN-mask mismatch (5/1149 dates — beta needs 252 trailing
+RETURNS, composite needs 252 trailing PRICES, masks can differ); (5)
+integrity-check blind spots; (6) silent non-convergence risk in the cap loop.
+
+**Operator decision:** presented the finding that I'd left turnover control
+(the no-trade band) inside Phase 3 scope while correctly deferring
+vol-targeting/drawdown-brake to Phase 4 — an inconsistency, since the
+mission's own phase plan assigns turnover control to Phase 4 too. Operator
+approved (AskUserQuestion) dropping the no-trade band entirely from EXP-002,
+deferring to Phase 4 — **logged as D26**. Process note, self-corrected: the
+code cited "D26" before that row existed in decisions.md (caught by the v2
+leak-hunter audit, not by me first) — the underlying approval was real, I had
+just not logged it yet. Fixed by writing D26 accurately; flagged here rather
+than smoothed over.
+
+**Fixes applied (v2):** no-trade band no longer called in
+`compute_signal_and_weights` (kept, tested, documented for Phase 4 reuse);
+`neutralize_against_beta` masks composite/beta to joint `notna()` (exact
+identity now holds to ~1e-14 on real data, confirmed empirically); integrity
+check hardened (NaN-pattern match, non-empty, subset checks — 6 failure modes
+probed and all correctly rejected); cap loop raises on non-convergence
+instead of silently returning; `run_exp002.py` now writes
+`battery_out/diagnostics.json` with all 4 promised diagnostics.
+
+**v2 real run** (`PHASE3-M0-v2`, ledger row logged — v1's row is NOT deleted,
+per "log every trial including discards"): net Sharpe (5bps) 0.2139 (tiny
+shift from v1, consistent with the no-trade band's removal changing turnover
+slightly — same K2 ambiguous zone). **Canary result byte-identical to v1**
+(base_t=3.876348339819923, lagged_t=4.421707974130559) — confirms the trip is
+a genuine property of the signal, untouched by the capping/no-trade-band
+layer, not an artifact of the bugs just fixed. Diagnostics now clean: 0
+position-cap breaches, 0 category-cap breaches (both exactly at their caps on
+the binding dates), gross exact to 2.0 ± 1e-15. Residual, spec-disclosed
+imperfections remain and are reported honestly, not hidden: max net dollar
+exposure 0.427 (21% of gross, one date), max ex-ante portfolio beta 0.52 (mean
+exposures small: 0.025 / 0.053).
+
+**Final audits (v2): leak-hunter NO LEAKAGE FOUND, reviewer APPROVE WITH
+CHANGES** (both re-confirmed the fixes are real via independent
+recomputation, not just reading code; reviewer's one standing point: the
+canary trip must be surfaced explicitly before any K2 claim — which this
+entry does). Two more trivial fixes applied post-review (dead-code guard
+simplified; `m0_provider` now asserts the passed `config` matches the module
+constants it actually uses, since it was previously read and ignored) —
+verified behavior-preserving directly (identical gross value) rather than
+re-running the full 5-minute battery a third time.
+
+**Verdict: EXP-002 is NOT validated.** K2's numeric reading (0.214, ambiguous
+zone) is moot — the pre-registered spec is explicit that a canary trip halts
+"validated" status regardless of the Sharpe reading, and that stands. This is
+not a Tier-1-null or a K2-fail in the clean sense; it is an honest
+"the referee did its job and caught something real about this edge's nature"
+result. Trial budget: 6/250 spent (EXP-001's 4 + PHASE3-M0 v1 + v2 — 2 real
+executions against 1 planned, disclosed honestly: driven by an audit-found
+implementation bug, not hypothesis-shopping; construction intent unchanged
+between v1/v2).
+
+**Open questions for the operator, not decided here:**
+1. Should S1/S2 be retroactively canary-tested (they never were at EXP-001
+   time), and if the time_shift trip is confirmed there too, does the
+   Tier-1 "graduation" standard need a canary leg added going forward?
+2. Is "the edge is substantially an untimed static tilt" itself disqualifying
+   for a strategy whose whole premise is *predicting* relative returns, or is
+   a partially-static tilt (still real, still measured honestly) an
+   acceptable characterization worth pursuing into M1 with different
+   treatment (e.g. it may combine differently with a genuinely timed
+   candidate later)?
+3. S6's sign-flipped variant (real continuation, not reversal) is NOT
+   pre-registered and was explicitly not chased by the screening agent for
+   HARKing reasons — does the operator want it proposed as a fresh,
+   independently-justified confirmatory hypothesis (with its own economic
+   rationale, not just "the opposite sign scored better")?
+4. Proceed to M1 admission testing despite the canary situation, or treat
+   this as the natural stopping point for the current signal set and pivot
+   design attention elsewhere?
+
+**Committed this round (pending):** `src/portfolio_m0.py`,
+`tests/fast/test_portfolio_m0.py`, `research/phase3_m0/` (run_exp002.py,
+prices_live_window.csv, battery_out/{battery_result.json,diagnostics.json}),
+`research/decisions.md` (D26), `research/audit_log.jsonl` (5 new entries:
+2 for the stale test fix/D22 redo earlier this session, 3 for EXP-002's
+reviewer/leak-hunter passes), this journal entry.
