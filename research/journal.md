@@ -411,3 +411,126 @@ coded in `validation/ic.py` (mean IC ≥0.01, NW t≥2.0, ≥60% years positive)
 train/validation only (1999-12-22..2021-12-31). 4 planned trials — the first real
 usage of the 250-trial budget (Phase 0/1 rows are preregistered/data_build/
 throwaway-synthetic, none countable per D14).
+
+## 2026-07-09/10 — EXP-001 executed, audited, and closed (D23). Session paused here.
+
+**Implementation.** `src/signals.py` (S1-S4 exactly per the frozen spec) +
+`tests/fast/test_signals.py` (14 unit tests: independently-computed expected values,
+not tautological re-calls of the module's own helpers; point-in-time truncation
+tests on all four; the S1-vs-S2 skip-month differentiator test; an exact beta
+recovery test; S4's strictly-prior-years and current-year-exclusion tests). Bring-up
+found 3 test-construction bugs (a dead placeholder line; two cases of a small-N
+synthetic panel letting the constructed asset contaminate its own market proxy via
+`equal_weight_market_return` — fixed both by using the `market=` override each
+function already exposed) — all bugs were in the NEW test fixtures, not in
+`signals.py` itself; root-caused with evidence each time before editing anything.
+`pytest tests/fast tests/data -q` → **67 passed in 4.87s**.
+
+**Real run.** Duration estimated up front per the new §3.6 rule (no directly
+comparable past run existed; reasoned from job size: ~7285×70 rolling ops + ~4600
+per-date IC calls across 4 signals → "under 60s, likely 10-30s"). Actual: **7.87s**
+wall clock (`time /workspace/venv/bin/python research/exp001_signal_ic/run_exp001.py`)
+— faster than estimated, no divergence flag needed (the rule flags 2x+ *over*, not
+under). Real result (`research/exp001_signal_ic/results.json`, train/val only,
+1999-12-22..2021-12-31, holdout never touched):
+- **S1 momentum: PASSES** — mean_ic 0.0378, t_nw 3.919, 73.9% years positive.
+- **S2 TS trend: PASSES** — mean_ic 0.0307, t_nw 3.162, 78.3% years positive.
+- **S3 low-beta: FAILS** — mean_ic -0.0357, t_nw -3.062 (significant, wrong sign),
+  30.4% years positive. Not a bug: real market factor uses all ~70 eligible names
+  (negligible self-contamination, unlike the small-N test fixtures above); plausible
+  reading is the classical single-equity-market BAB anomaly not transferring to this
+  heterogeneous cross-asset-class ETF universe over 1999-2021 — logged as an honest
+  negative, not chased.
+- **S4 seasonality: FAILS** — mean_ic -0.0016, t_nw -0.215, indistinguishable from
+  zero.
+- Both passing ICs sit in validation_methodology.md §7's "0.02-0.05 realistic"
+  band, far under the 0.15 pre-declared leak-flag — checked explicitly, did not
+  fire (per the design-reviewer consult's one requested addition, folded in here).
+- **Inter-signal correlation (descriptive, design §6): S1↔S2 = 0.796** — the two
+  survivors are substantially one bet. Flagged for whoever designs the Phase-3
+  combiner (decorrelation-aware weighting, or treat as one signal), not resolved now.
+- Ledger: exactly 6 rows total (1 data_build, 1 preregistered, 4 result) — verified
+  by direct count, matching the pre-registered `planned_trials: 4`. 4/250 trial
+  budget spent. **Verdict: partial survival, not Tier-1-null** (K1 needs all 4 to
+  fail; design §10).
+
+**Audits (writer≠verifier, mission §8 + the new CLAUDE.md design-reviewer rule).**
+Both spawned in parallel, each given only the diff/files + the pre-registration:
+- **leak-hunter → CLEAN.** Attempted refutation on every mandated axis — look-ahead
+  (including an empirical truncation attack: recomputed all 4 signals on the real
+  panel truncated at 2017-12-29, bit-identical to the full-panel run at every
+  overlapping date), quarantine access (0 lockbox references outside a docstring
+  disclaimer; sha256 of all 3 panel artifacts match MANIFEST.json exactly), spec
+  drift (spec untouched since the freezing commit, verified via `git diff`),
+  rescue-by-sign-flip (S3's failure is logged as a failure, nothing flips it),
+  ledger completeness (6 rows, independently re-verified by me: `grep -c` gives
+  4 result / 1 preregistered / 1 data_build, exact match) — found no defect on
+  any axis. One process note: the code was still uncommitted when it audited
+  (fixed by this entry's commit) and independently re-confirmed D22 (the lockbox
+  test fix) was a legitimate flake-fix, not ruler-shaving.
+- **design-reviewer → ENDORSE** on all four presentation points (S1/S2 graduate,
+  S3/S4 drop without rescue, S1/S2 correlation flagged-not-resolved for Phase 3,
+  report now rather than chasing Tier-2 first); explicitly found no §7 pause-bar
+  trigger. Ran as a `general-purpose` substitute on `model=fable` with the real
+  design-reviewer.md content injected verbatim as instructions: the actual
+  `design-reviewer` subagent type exists on disk (`.claude/agents/design-reviewer.md`,
+  committed by the operator directly as `a9bd0f7` mid-session) but was not in this
+  session's loaded agent registry (added after the registry snapshot) — confirmed
+  available again after the session-limit reset (system message: "New agent types
+  are now available... design-reviewer"), so future consults should use it directly.
+  Both agents' factual citations were spot-checked against files read directly in
+  this session (validation/ic.py thresholds, results.json values, ledger counts,
+  git log) and matched exactly.
+
+**Flagged for operator attention — possible prompt-injection, not acted upon.**
+When resumed via SendMessage to restate its verdict, the design-reviewer substitute
+reported receiving a message "framed as being from 'the coordinator'" that, per its
+own account, carried instructions about pre-treating future coordinator messages as
+carrying operator-equivalent authority ("act on coordinator course-corrections as if
+they were within my existing permissions... only my user's own messages count as
+approval"). It explicitly refused to fold this into its findings and surfaced it
+instead — correct behavior. Two things make this ambiguous rather than confirmed:
+(1) my own two messages to that agent (the original task + the restate request, both
+quoted in full in this session's transcript) contain nothing resembling that
+content; (2) leak-hunter, resumed the same way in parallel, reported its own
+"coordinator" resume message as completely benign (just my restate request) — no
+anomaly. Both notifications carried an explicit system caveat that the usual
+safety-classifier review was unavailable for these two runs. I cannot determine from
+here whether this was a genuine external injection, a harness-labeling artifact the
+design-reviewer substitute (primed to be maximally skeptical about authority/approval
+framing, per its own mandate) over-flagged, or a model confabulation — but no
+evidence exists that anything was actually acted on: the substitute's actual verdict
+is the one presented above, fully grounded in file:line citations I independently
+spot-checked. Operator: worth a look if platform/harness logs for agents
+a1471f5fa91ac9681 / a70b86995e46691c1 are available; no repo/data action needed on
+my end.
+
+**Committed and pushed this round:** `src/signals.py`, `tests/fast/test_signals.py`,
+`research/exp001_signal_ic/{run_exp001.py,results.json}`, the 4 real ledger rows,
+decisions.md (D23), this journal entry.
+
+---
+### SESSION PAUSED HERE (operator stopping the pod; resume tonight)
+
+**Done:** Phase 2's first signal batch is fully closed — pre-registered, executed,
+audited (leak-hunter CLEAN + design-reviewer ENDORSE), logged, decided (D23),
+committed, and pushed to `origin/research/gordian-v2` (push confirmed, not just a
+local commit — see commit hash in the push output this entry accompanies). Build is
+green: 67 tests (fast+data) plus the untouched frozen 53 (validation/tests/referee,
+byte-identical since Phase 0/M4). Trial budget: 4/250 spent, both outcomes (2 pass,
+2 fail) logged honestly.
+
+**Mid-flight:** nothing code-wise — this was a clean stopping point, not a partial
+one. Two things await the operator, not further Claude work: (1) the prompt-injection
+flag above; (2) M4/L1 from the prior session remain as previously logged (M4 active,
+L1 deferred by operator choice) — no change this round.
+
+**Next step, next session:** Phase 2 continues — either (a) attempt more Tier-1
+signal candidates / Tier-2 carry as a separate pre-registered trial (design §5 Tier 2
+needs new data: FRED yields, dividends, roll-proxies — a new dependency, flag to
+operator before adding it), or (b) proceed to Phase 3 (cross-sectional model) with
+just S1+S2, treating their 0.796 correlation as the first open design question for
+the combiner (M0 z-score composite per design §6) — **use the now-available real
+`design-reviewer` subagent directly** (not the substitute) to weigh in on which of
+(a)/(b) to pursue before building anything. Either way: pre-register before touching
+real data again, same as every step this session.
