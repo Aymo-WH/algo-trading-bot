@@ -887,3 +887,71 @@ honest terminus is a static risk-premium book the market-neutral mandate exclude
 **Not yet decided by me** — this is a rich set of recommendations for the operator
 to weigh; no new trial, data dependency, or spec has been started as a result of
 this consult without further operator direction.
+
+## 2026-07-10 — Session resume: operator decisions on A-E (D28-D30); EXP-003 sequenced next
+
+Context restoration verified before any work: CLAUDE.md + FABLE_MISSION.md re-read
+in full; journal tail + decisions.md through D27 confirmed consistent with the
+committed session-resume note (`research/RESUME_PROMPT_2026-07-10.md`, commit
+9f3b164); `git status`/`git log` confirmed branch `research/gordian-v2` clean,
+up to date with origin, HEAD at 9f3b164.
+
+**D27 applied at this phase boundary, before presenting anything.** Rather than
+re-running the prior session's open-ended Fable brainstorm, synthesized its
+recommendations plus the operator's own open items (A-E) into a concrete proposed
+sequencing and sent THAT to a fresh design-reviewer consult (Fable-pinned,
+single agent, not a multi-agent workflow this time — the brainstorm stage was
+already done) for a groundedness/integrity check before bringing it to the
+operator.
+
+**Verdict: REFINE**, not a clean endorse. Confirmed the synthesis was faithful to
+the prior consult and to D25/D26/D27, but found five real gaps:
+1. My "B before A" framing conflated *gate* (B's result should decide whether to
+   proceed with A) with *calibration* (B's result informs A's spec but doesn't
+   block it) — two different proposals I hadn't distinguished. Recommended
+   calibration as the sounder reading, since carry's timing content comes from
+   yield curves, not price paths — a null on momentum/trend timing doesn't
+   mechanically predict a null on carry timing.
+2. Declining sign-flip rescues (item C) is a HARKing side-door unless it carries
+   a **prior-exposure clause**: S3 and S6 are both already data-exposed (t=-3.06
+   counted; t=+2.90 sign-flipped, exploratory), so any later "fresh, independently
+   motivated" continuation/high-beta hypothesis needs to disclose that exposure
+   and clear a stricter bar, not just show up under new wording.
+3. The canary-leg question left open at EXP-002's close (should Tier-1 graduation
+   itself require a canary leg?) needed a decision now, before EXP-003/EXP-004's
+   specs freeze — not after a third surprise trip.
+4. B's spec had unpinned degrees of freedom (exact expanding-window definition,
+   trial count, and whether a timing-component failure retroactively touches
+   S1/S2's D23 graduation — it does not).
+5. Trial-budget arithmetic should be stated explicitly, not left implicit: 6/250
+   spent; B adds ~2; the carry package adds ~5 → ~13/250 if both proceed.
+
+Also flagged (non-blocking, folded into the specs when written rather than
+decided now): a quarantine-adjacent detail for carry (holdout-period FRED yields
+need a stated storage answer, per D18's precedent) and a note that
+regime-stratified reporting (one of Fable's Q3 suggestions) needs its bucket
+definitions frozen once, by rule, or it becomes a post-hoc slicing tool.
+
+**Operator decisions (AskUserQuestion, same mechanism as D15/D20/D26) — logged
+as D28, D29, D30 in decisions.md:**
+- **A (FRED/carry): green-lit now** (D28). Build order sequenced — EXP-003 (item
+  B) runs first since it needs no new data; the carry screen (to be pre-registered
+  as **EXP-004**, not EXP-003 as earlier prose in this journal loosely suggested)
+  begins once EXP-003 closes out.
+- **C (sign-flip rescue): ratified WITH the prior-exposure clause** (D29) — the
+  stricter reading design-reviewer required, not the simpler blanket version.
+- **Canary leg on graduation: added now, diagnostic only** (D30) — reported at
+  graduation time going forward, not blocking, given the still-open question of
+  how well the 26-week time_shift canary is calibrated for longer-lookback signal
+  families.
+- **Sequencing: confirmed B first.**
+
+**Next: EXP-003 (S1/S2 static-vs-timing decomposition) — pre-registration in
+progress, not yet run.** Per B's own framing: split each of S1/S2 into a
+point-in-time expanding-mean "static" component and a residual "timing"
+component, test the timing component alone against the unchanged Tier-1
+graduation rule (`validation.ic.passes_graduation`), plus report canaries
+diagnostically per D30. Two planned trials (S1_timing, S2_timing); static
+components' IC reported descriptively, same pattern as EXP-001's inter-signal
+correlation. No code has run on real data yet this session — the spec is being
+written next, to be frozen before any real computation, per mission §3.3c.
