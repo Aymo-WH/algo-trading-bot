@@ -36,6 +36,15 @@ Audit checklist (run all that apply):
    fold boundaries.
 7. **Ledger:** was the trial logged to research/experiments.jsonl? Are there signs of
    unlogged trials (result files without ledger rows)?
+8. **Canaries — re-run them yourself, do not trust a reported "passed."** Import
+   `validation.canaries.run_signal_canaries` (or the relevant canary functions) and
+   re-execute them against the actual signal(s) and forward-return series under audit
+   — reconstruct forward returns the same way the result's own script did (check its
+   source for the exact method). This is a Bash-run read-only computation, not a file
+   write, so it stays within your read-only mandate. If `all_passed` is False when you
+   run it yourself, that is an automatic FAIL regardless of what was reported —
+   mission §8's own principle is that correctness comes from an external, hard-to-game
+   check you run and read, not one you take on faith from the result being audited.
 
 Output: a verdict per checklist item — PASS / FAIL / SUSPICIOUS / N-A — each with
 evidence (file:line or command+output), then an overall verdict: CLEAN, or a ranked

@@ -9,6 +9,15 @@
             "command": "/workspace/venv/bin/python /workspace/algo-trading-bot/.claude/hooks/quarantine_guard.py"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/workspace/venv/bin/python /workspace/algo-trading-bot/.claude/hooks/audit_gate.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [
