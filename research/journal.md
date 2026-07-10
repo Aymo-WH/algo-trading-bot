@@ -804,3 +804,86 @@ re-litigating canary design now. Diversifying the signal library (Tier-2
 carry, or another economically distinct family) remains the highest-value
 next lever per the earlier redesign consult (D25) — this finding reinforces
 rather than changes that read.
+
+## 2026-07-10 — Governance change (D27): standing architecture consult; deep Fable brainstorm
+
+**D27 formalized** (research/decisions.md, FABLE_MISSION.md §3.7/§9, CLAUDE.md):
+operator directed that the `design-reviewer` consult broaden from an event-triggered
+"before presenting to the operator" check to a standing, whole-project, every-phase
+rule — consulted at phase boundaries, after major audit findings, and whenever
+weighing a new signal/combiner/direction, with authority to proactively flag or
+redirect, not just endorse/refine/reject something finished. Rationale: extend the
+existing cost-tiering pattern (cheap main-session driver, strongest-model auditors)
+from occasional to continuous, so architecture-level judgment is never left solely
+to the cheaper driver. Demonstrated the same day via the consult below.
+
+**Fable-pinned architecture consult** (design-reviewer, model=fable, given full
+project context — FABLE_MISSION.md, design.md, decisions.md D1-D26, recent journal
+entries — and three open questions: more diverse candidate signals, alternative
+combiner architectures, and backtesting's fundamental limitations for this project):
+
+**Key reframe, more informative than anything asked for:** decomposing M0's
+canary finding (constant per-asset tilt alone scores t=5.28 vs. live signal's 3.88;
+the time-varying component ALONE scores only t=2.81) together with S3's
+significant-WRONG-SIGN result (high-beta outperforms) and S6's wrong-sign result
+(continuation, not reversal) paints a coherent picture: over 1999-2021 on this
+70-ETF universe, price-ranking signals are substantially capturing the
+**unconditional cross-asset risk-premium ordering** (risky beats safe, persistently)
+rather than genuine timed alpha — and the quarantined holdout (2022-2026) begins
+with the rate shock that inverted exactly that ordering. Flagged as the project's
+single largest known risk, not solvable by more validation rigor.
+
+**Q1 (diverse signals), ranked:** (1) **Carry (S5), bond+FX legs — the clear
+priority**, needs new FRED yield data (already flagged D6, needs operator sign-off),
+moderate-high decorrelation confidence, but honestly expected to ALSO show static
+tilt (pre-register a static/timing decomposition alongside it so that's not another
+surprise); (2) equity/REIT dividend-yield carry, needs new ex-date data; (3)
+overnight-vs-intraday return decomposition (genuinely different information
+channel — flow/clientele, not price-path), needs OPEN prices not in the current
+panel; (4) high-volume return premium — the only candidate needing NO new data,
+cheap exploratory pass; (5) fundamentals-anchored value — deferred, hard to get
+point-in-time, and S6's wrong-sign result is a real yellow flag for value-style
+mean-reversion in this universe. Explicitly recommended AGAINST: VRP (needs options
+data we don't have), commodity carry roll-proxies (noise), and — explicitly —
+**any sign-flipped S3/S6 variant**, named as the same smuggled-beta trade the
+canary already caught and a HARKing trap the screening agent correctly refused.
+
+**Q2 (combiner alternatives):** direct answer to "is there a smarter combiner
+trick" — **no, full stop; the constraint is information, not combination
+cleverness** (reconfirms D25's GLS-ceiling finding independently). M1 (XGBoost)
+recommended DEFERRED until ≥3 economically distinct signals exist — with only 2
+correlated inputs, any Sharpe improvement it shows should be read as suspicious,
+not celebrated. Risk-parity/Bayesian-shrinkage/disagreement-filter/regime-gating
+combiners all specifically ruled out as pointless at N=2 correlated signals. **The
+one genuinely new architectural idea:** decompose each signal into its static
+component (expanding-window mean) and timing component (residual), and test the
+TIMING component alone against the existing graduation rule — 1-2 cheap trials that
+directly answer "is there any timed information here at all," dissolving the
+time_shift-canary interpretation problem at the root rather than patching around it.
+
+**Q3 (backtesting limits):** candid assessment that this project's machinery
+(purged CPCV, DSR/PBO, 5-canary suite, pre-registration, locked one-shot holdout)
+is "at or beyond the published best-practice frontier" for what a backtest CAN
+offer, and three things are irreducible by more rigor: one historical path (no
+statistical trick manufactures independent history), non-stationarity of the
+premium itself (the named risk above), and published-anomaly decay
+(McLean-Pontiff's 26-58% post-publication haircut, already in our own evidence
+brief, applies to this entire signal family). Concrete additive suggestions:
+regime-stratified P&L reporting as a first-class deliverable; formally
+pre-registering a decay haircut on expectations (e.g. "expected live Sharpe ~ 0.5x
+validated backtest Sharpe"); and — the standout suggestion — a pre-registered
+live/paper-monitoring contract with a falsifiable kill trigger, written now, which
+extends the pre-registration discipline past the backtest boundary into the only
+genuine out-of-sample test left: forward time.
+
+**The ONE recommended next action:** build Tier-2 carry (bond+FX legs) as a
+pre-registered EXP-003 IC screen, after operator sign-off on the new FRED
+dependency, with a static/timing decomposition diagnostic pre-registered into the
+screen itself; piggyback a 1-2-trial static-vs-timing decomposition of S1/S2 in the
+same effort. Together, ~5 trials (11/250 budget) would answer whether this universe
+contains any timed, diversified cross-sectional information at all, or whether the
+honest terminus is a static risk-premium book the market-neutral mandate excludes.
+
+**Not yet decided by me** — this is a rich set of recommendations for the operator
+to weigh; no new trial, data dependency, or spec has been started as a result of
+this consult without further operator direction.
