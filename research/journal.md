@@ -757,3 +757,50 @@ prices_live_window.csv, battery_out/{battery_result.json,diagnostics.json}),
 `research/decisions.md` (D26), `research/audit_log.jsonl` (5 new entries:
 2 for the stale test fix/D22 redo earlier this session, 3 for EXP-002's
 reviewer/leak-hunter passes), this journal entry.
+
+## 2026-07-10 — Retroactive canary check on S1/S2 individually (operator item 1)
+
+Per operator request, ran the existing frozen canary suite
+(`validation.canaries.run_signal_canaries`) directly against S1 (momentum)
+and S2 (TS trend) individually, on the same train/validation window EXP-001
+used. Diagnostic only — read-only reuse of already-frozen/audited code and
+already-computed signals, no new construction, no pre-registration needed
+(not a new confirmatory trial; doesn't change EXP-001's graduation, which
+was IC-legs-only and did not include canaries).
+
+Command: inline script computing `momentum_s1`/`trend_s2` on
+`data/panel/trainval_close.csv`+`eligibility_trainval.csv`, restricted to
+rebalance dates in `[1999-12-22, 2021-12-31]`, canaries run against
+`fwd5 = close.shift(-5)/close - 1`. Real output:
+
+- **S1_momentum:** base t_nw 3.9187, mean_ic 0.0378. label_shuffle PASS,
+  random_feature PASS, **time_shift FAIL** (lagged_t 3.1802, retains 81.1%
+  of base).
+- **S2_ts_trend:** base t_nw 3.1622, mean_ic 0.0307. label_shuffle PASS,
+  random_feature PASS, **time_shift FAIL** (lagged_t 3.0283, retains 95.8%
+  of base).
+
+**Both individually fail time_shift, confirming M0's canary trip is not an
+artifact introduced by the combiner alone.** But the failure PATTERN
+differs meaningfully from M0's: S1/S2 individually DECAY under the 6-month
+shift (81%/96% retained, still above the ≤50% pass bar) — plausibly a
+largely mechanical consequence of ~12-month trailing lookback windows
+sharing most of their underlying trading days across a 26-week shift, not
+necessarily a hidden static tilt in the same sense as M0's finding. M0
+uniquely STRENGTHENS under the shift (114% — leak-hunter's earlier
+beta-hedge-decay explanation is specific to the neutralization step, not
+inherited from S1/S2 raw). Read: the time_shift canary as currently
+calibrated (shift=26 weeks, pass bar=50% retention) may be a cleaner test
+for short-lookback signals than 12-month ones — a real interpretive
+limitation worth remembering, not itself a leak or a reason to relax the
+canary's threshold (no change made or proposed to `validation/canaries.py`,
+which stays frozen).
+
+**No action taken on the calibration question** — operator decision stands
+(Q2 from the prior exchange): accept the static-tilt characterization for
+M0, proceed, let the fuller validation battery (CPCV/DSR/sub-period
+stability, eventually the one-shot holdout) be the arbiter rather than
+re-litigating canary design now. Diversifying the signal library (Tier-2
+carry, or another economically distinct family) remains the highest-value
+next lever per the earlier redesign consult (D25) — this finding reinforces
+rather than changes that read.
