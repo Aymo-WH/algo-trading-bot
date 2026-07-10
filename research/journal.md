@@ -578,6 +578,45 @@ original f78e1d1 change — nothing to recommit (`git checkout --` restored it; 
 tree clean against HEAD). Verdict logged to `research/audit_log.jsonl`. D22 marked
 "active" (ratified) via D24; process gap closed.
 
-**No new alpha/Phase-2/3 work has started this session** — items 1–3 above and the
-pending redesign consult (item 4, S1/S2 breadth question) are the operator's explicit
-gate before anything else proceeds.
+**Item 4 — S1/S2 redesign consult run and reviewed.** Per operator instruction, ran
+as a small Workflow: 3 parallel research agents (decorrelation/combiner literature;
+candidate signal families; cost-benefit-risk of the fork itself) -> 1 synthesis
+agent -> 1 design-reviewer fresh-context check (5 agents total). Operator feedback
+on execution (saved to memory for future sessions): the consult should have been
+"Fable-led" (all research/synthesis agents pinned to `model: claude-fable-5`
+explicitly, not inheriting the session's Sonnet-5 driver — only the design-review
+stage picked up Fable, via its own subagent-type frontmatter pin) and the agent
+count crept from the approved "2-3 research + synthesis" framing to 5 once the
+already-separately-requested design-review stage stacked on top, uncalled-out.
+
+**Result:** design-reviewer verdict REFINE (not clean ENDORSE) on the synthesis's
+recommendation to proceed to Phase 3 with S1+S2 as-is (M0 unchanged) plus a
+parallel non-blocking exploratory screen on a new candidate (long-horizon
+reversal). Four required refinements before proceeding, all incorporated: (1)
+renamed the candidate S5->**S6** (S5 is already reserved for Tier-2 carry, D6);
+(2) explicitly distinguished S6 (long-horizon, skip-12m) from D4's dropped
+short-term reversal; (3) sequenced the Phase-3 M0 pre-registration spec to freeze
+*before* launching the S6 screener, making the firewall mechanical; (4) the
+escalation trigger (CPCV-median net Sharpe landing 0.2-0.4 -> consider escalating
+S6) is written into the frozen spec itself, not left as prose.
+
+**Operator sign-off:** logged as **D25** — proceed to Phase 3 with S1+S2, M0
+construction unchanged from design.md §6-7 (the 0.796 correlation is a
+Grinold-GLS-derived breadth ceiling that no linear recombination trick escapes;
+hunting for one would itself be a new, ledger-inflating trial per the
+forking-paths risk the research surfaced).
+
+**Phase 3 M0 pre-registration frozen:** `specs/EXP-002-phase3-m0-combiner.md` —
+exact construction (S1+S2 equal-weight composite, cross-sectional OLS-residual
+neutralization against beta for exact pre-clip dollar+beta neutrality, ±2.5 clip,
+iterative position/category-cap waterfilling to gross 200%, no-trade band),
+referee invocation via the existing frozen `validation.run_battery` (unchanged),
+falsification = K2 (net Sharpe < 0.2 -> null), planned trial count 1 (the 5th
+real trial against the <=250 budget). Vol-targeting/drawdown-brake explicitly
+deferred to Phase 4 per the mission's own phase plan, not smuggled into M0.
+Committed ahead of implementation, and ahead of the S6 screener launch, per
+refinement #3's sequencing requirement.
+
+**No new alpha/Phase-2/3 code has RUN yet this session** — the spec above is
+frozen; `src/portfolio_m0.py` (the provider implementing it) and the actual
+battery run are next.
