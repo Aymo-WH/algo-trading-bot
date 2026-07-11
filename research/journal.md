@@ -955,3 +955,158 @@ diagnostically per D30. Two planned trials (S1_timing, S2_timing); static
 components' IC reported descriptively, same pattern as EXP-001's inter-signal
 correlation. No code has run on real data yet this session — the spec is being
 written next, to be frozen before any real computation, per mission §3.3c.
+
+## 2026-07-10/11 — EXP-003 executed, audited, and consulted (D31). NOT enrolled anywhere yet.
+
+**Implementation.** `src/decomposition.py` (`expanding_static_timing`: NaN-aware
+expanding mean via `shift(1)` + cumsum/count, matching `seasonality_s4`'s
+device) + `tests/fast/test_decomposition.py` (8 hand-computed tests: basic
+expanding mean, NaN gaps excluded from count/sum rather than treated as zero,
+the min_prior_obs boundary exactly, static definable when the current signal
+is NaN, column independence, PIT truncation invariance, static+timing
+reconstruction). All passed on first write; full `tests/fast tests/data` suite
+green at 84.
+
+**Real run.** Duration estimated at "under 3 minutes, likely 30-120s" (reasoned
+from EXP-001's 7.87s baseline plus the canary suite's ~150 repeat IC
+computations per signal). Actual: **11m44s** — a real divergence (6-24x over),
+root-caused as the frozen `validation/canaries.py`'s per-date Python loop
+inside `cross_sectional_ic`, repeated ~150x per signal by the label_shuffle/
+random_feature canaries; not a thread-cap or correctness issue, just an
+inherent cost of the existing frozen canary code applied to 2 signals'
+canaries where EXP-001 ran none. Real result
+(`research/exp003_timing_decomposition/results.json`, train/val only,
+1999-12-22..2021-12-29, holdout never touched):
+- **S1_timing PASSES**: mean_ic=0.0218, t_nw=2.372, 68.2% years-positive.
+- **S2_timing FAILS** on the t_nw leg alone: 1.750 vs the 2.0 bar (mean_ic
+  0.0166 clears 0.01; years-positive 63.6% clears 60%).
+- Static components (descriptive only): S1 t=3.326, S2 t=3.514 — both higher
+  than their timing counterparts.
+- Canaries (diagnostic, D30): **both timing components fail time_shift with
+  the lagged t EXCEEDING live** (S1 2.372->2.533; S2 1.750->2.469) — a
+  stronger anomaly than the raw signals' mere 81%/96% retention.
+- Ledger: exactly 2 real rows (EXP-003-S1_timing, EXP-003-S2_timing),
+  independently recount-verified; static/canaries correctly excluded from
+  the ledger. Budget: 8/250.
+
+**Audits (writer≠verifier).** reviewer (first attempt): **APPROVE** —
+independently recomputed via a different algorithm to 1.8e-15, confirmed
+exact spec conformance, trial hygiene, and non-tautological tests; flagged
+the canary anomaly as a design-reviewer question, not a code defect, plus 4
+minor non-blocking nits (year-2000 IC-bucket granularity — confirmed no leg
+flips; a docstring gap; a spec-text wording nit with no behavioral effect; a
+fragile string-parse in the runner). leak-hunter's first attempt **failed
+mid-run** on a session/API limit (post-restart the operator flagged other
+things might drop the same way) — retried clean. leak-hunter retry: **CLEAN**
+across all 8 mandated refutation axes, including an empirical truncation
+attack (bit-identical at multiple cutoffs, both decomposition-only and
+end-to-end) proving no look-ahead. Root-caused the canary anomaly
+mechanistically as **"tilt re-injection"**: `timing(t-26) = [W(t-26)-static(t)]
++ [static(t)-static(t-26)]`; the second term (26 weeks of expanding-mean
+updates missing from the stale static estimate) is itself strongly predictive
+(t=2.74/2.70) because it's a slice of the dominant static tilt (t=3.33/3.51).
+Live timing subtracts the *most complete* tilt estimate (cleanest, weakest
+residual: t=2.27/1.77 on matched dates); shifting partially undoes that
+subtraction. Structural property of subtracting a slowly-updated mean, not a
+leak — confirmed via truncation attacks it needs no future information.
+Both verdicts logged to `research/audit_log.jsonl`.
+
+**Design-reviewer consult (Fable, D27 standing rule — triggered by an
+ambiguous result: partial pass + a mechanistically-explained-but-still-present
+canary anomaly).** Verdict **REFINE** on the architect's (session driver's)
+proposed characterization — a real correction, not a formality:
+- **S1: mostly right, one overclaim.** "Genuine timed information on a
+  stronger static tilt" is fair and matches the spec's own pre-registered
+  reading. But drop "dominant" (IC components are correlated, not additively
+  attributable — S1 static 0.0287 + timing 0.0218 = 0.0505 exceeds raw S1's
+  0.0378, so proportional-share language claims a measurement never made),
+  and don't let "graduates" read as "strong": t=2.372 is the weakest
+  graduating t of the project so far, echoes M0's own timing-only t=2.81 from
+  EXP-002 (low-novelty confirmation, not new discovery), and would not clear
+  the HLZ t>=3.0 bar design.md §9 applies to a final candidate.
+- **S2: one real error, corrected.** "Almost entirely static tilt" is
+  WRONG. S2_timing's ~95% CI (from the reported NW se) spans roughly
+  [-0.002, +0.035] — contains BOTH zero AND S1_timing's 0.0218. The data
+  cannot distinguish "S2 has no timing signal" from "S2's timing is
+  comparable to S1's." Correct framing: a near-miss null (falsified per the
+  frozen spec's rule, correctly not claimable), not a demonstrated absence of
+  timing information — the test isn't powered to rule that out.
+- **EXP-004 (Tier-2 carry): D28's authorization stands unconditionally** —
+  EXP-003 was calibration, not a gate, and came out on the proceed side
+  anyway. Five requirements before freezing the spec: (1) reuse
+  `src/decomposition.py`/MIN_PRIOR_OBS=52 verbatim as a descriptive leg, no
+  retuning; (2) pre-declare the expected tilt-re-injection canary signature
+  and its two-condition adjudication test (quantitative identity accounting +
+  truncation attack, else treated as a live trip) BEFORE running, for both
+  the timing residual and the separately-expected raw long-lookback decay;
+  (3) raw carry stays the only confirmatory trial, timing/canaries
+  descriptive; (4) add carry-vs-S1/S2 static/timing correlation as a required
+  descriptive diagnostic — the number that actually says whether the FRED
+  dependency buys real breadth or just re-finds the same static ordering;
+  (5) pin the cross-sectionalization method (within the ~10-name bond sleeve
+  vs panel-wide-with-NaN) and the holdout-period FRED storage question in the
+  spec before pulling data.
+- **Canary-interpretation-for-residual-signals: institutionalize as a class,
+  but carefully.** This is the SECOND mechanistically-root-caused instance of
+  the same structural family (EXP-002's beta-hedge-decay; EXP-003's
+  tilt-re-injection — both "X minus a slow estimate of X's persistent
+  component" re-acquiring that component under a shift). Keep it separate
+  from the unrelated long-lookback-retention limitation (don't blanket-merge
+  into "time_shift is unreliable here"). Attach the two-condition adjudication
+  test so it's a testable rule, not a waiver. Must be ratified by the
+  OPERATOR as a decision row, not just architect prose — because
+  `run_signal_canaries.all_passed` still gates strategy-level "validated"
+  status and K4 halts on trips, so this returns WITH BLOCKING FORCE at Phase
+  5 if any residual-class signal is in the eventual book. No change to the
+  frozen canary code itself.
+- **Proactive flags:** (1) state explicitly that EXP-003 graduated a
+  diagnostic object, not a new tradeable signal — enrolling S1_timing in any
+  book is a fresh proposal needing its own decision row and trial, not an
+  automatic consequence of clearing the same numeric rule; (2) **the real
+  decision this tees up**: does the eventual book trade the static tilt
+  (permitted by the mandate — dollar/beta-neutral static risk-premium
+  harvesting is a legitimate identity, just a different one than "timed
+  alpha," with the edge concentrated in exactly the component the 2022-start
+  holdout is known to punish) or strip it and keep only the thinner,
+  currently one-signal timing story, or deliberately blend and report both
+  separately — a genuine architecture fork for the operator, not resolved by
+  EXP-003 itself; (3) pre-commit now: no S2_timing rescue-by-reparameterization
+  will be attempted (t=1.75 is a near-miss and the pull to retune
+  MIN_PRIOR_OBS will be real; already forbidden by the frozen spec, echoed
+  here); (4) 8/250 spent, immaterial as budget but a reminder that a marginal
+  t=2.37 at trial 8 is exactly what DSR will deflate later.
+- Confirmed §7 bar reached: bundle to the operator (result +
+  corrected characterization, the tilt-vs-strip book-identity question, the
+  canary-interpretation ratification ask, the EXP-004 5-requirement plan) —
+  not a halt, since no leak/contradiction exists and D28 stands.
+
+**Process note, unrelated to the science:** partway through this session, two
+stray Agent invocations with literal "placeholder" content (description and
+prompt both "placeholder") appeared, attributed to the session driver. First
+one was initially (incorrectly) flagged to the operator as a possible
+external anomaly/prompt-injection; on the second occurrence it became clear
+this was the driver's own erroneous pattern for ending a turn while waiting
+on a background task, not anything external — corrected by simply ending
+turns with plain text and no tool call when waiting. Both stray agents
+behaved harmlessly (recognized the empty input, asked for clarification, no
+file/tool access), and neither was built on or trusted. Noted here for
+completeness, not because it affected any result above — the two audits and
+the design-reviewer consult that matter for EXP-003 are the deliberately
+launched ones (agentIds ending `...abc21af7fe8910f6f` [failed retry],
+`...a4691a8ff19e5e1ee`, `...a9d6258f0c353d89e`, `...a90834d93c372e801`).
+
+**Open for the operator (not decided here):**
+1. Book identity: trade the static tilt, strip it, or deliberately blend +
+   report separately?
+2. Ratify the canary-interpretation-for-residual-signals rule (with the
+   two-condition adjudication test) as a standing, blocking-relevant
+   decision — given it returns with force at Phase 5 for any residual-class
+   signal in the eventual book?
+3. Green-light drafting the EXP-004 (Tier-2 carry) spec with the 5 frozen
+   requirements above, now that EXP-003 has closed out?
+
+**Committed this round (pending):** `src/decomposition.py`,
+`tests/fast/test_decomposition.py`,
+`research/exp003_timing_decomposition/{run_exp003.py,results.json}`, 2 new
+`research/experiments.jsonl` rows, 2 new `research/audit_log.jsonl` entries,
+`research/decisions.md` (D31), this journal entry.
