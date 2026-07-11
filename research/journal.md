@@ -1222,3 +1222,307 @@ installing a verified, already-approved dependency's client library is not
 itself a trial). `research/RESUME_PROMPT_2026-07-11.md` updated twice
 today to keep it accurate as state changed (git-tracked, so the diff is
 the record: key configured -> verified+installed).
+
+## 2026-07-11 — EXP-004 implementation blocked before any data pull: credit-leg OAS data structurally unavailable pre-holdout (D36)
+
+Began EXP-004 implementation per the frozen v2 spec. Verified FRED series IDs
+live via `fredapi` before writing any construction code, per the spec's own
+"implementation-time verification, not guessed at design time" framing:
+
+- **Treasury leg: clean.** Nominal CMT (DGS3MO/DGS6MO/DGS1/DGS2/DGS3/DGS5/
+  DGS7/DGS10/DGS20/DGS30) all daily, long history (1962-1981 onward).
+  TIPS real CMT (DFII5/7/10/20/30) daily from 2003. Fund effective durations
+  looked up from current issuer fact sheets (iShares/BlackRock, Vanguard;
+  WebSearch, dated sources): SHY ~1.9-2.0y, IEF 7.2y, TLT 15.20y (2026-07-08),
+  AGG 5.78y (2026-03-31), BND ~5.7-5.8y, TIP 6.41y (2026-03-31). Applying the
+  frozen nearest-tenor rule: SHY->2, IEF->7, TLT->20, AGG->5, BND->5, TIP->7.
+- **Credit leg: BLOCKED.** Live-queried `BAMLC0A0CM` (IG OAS), `BAMLH0A0HYM2`
+  (HY OAS), `BAMLEMCBPIOAS` (EM OAS) — all three (and every rating-bucket
+  variant checked) first-observe **2023-07-11**, confirmed via a direct
+  `fred.get_series()` pull, not just search metadata. This is FRED/ICE's
+  well-documented 2022 licensing event: FRED had to drop historical vintages
+  of ICE-sourced index data and now carries only a rolling ~3-year trailing
+  window (2023-07-11 is exactly "today minus 3y" — a design-reviewer
+  observation, not mine originally; the gap never closes by waiting).
+
+**Consequence: the frozen v2 confirmatory test cannot run.** The holdout is
+2022-01-01..2026-06-30 (D8); 2023-07-11 onward sits entirely inside it. The
+credit leg (LQD/HYG/JNK/EMB) has zero FRED-sourced values on any train/val
+date, so the `min_names=10` combined test — and even the `min_names=4`
+credit-only leg-attribution diagnostic — cannot score a single pre-holdout
+date. This is a data-infeasibility wall, not a weak or noisy result.
+
+**Design-reviewer consult (Fable, D27 standing rule — major/unexpected
+finding, before any operator presentation).** Verdict: ENDORSE the read that
+this is a §7 pause, REFINE on the option set. Independently re-verified the
+finding and additionally checked the one rescue I hadn't: ALFRED vintage
+archives (`get_series_as_of_date`, `get_series_all_releases`) — confirmed
+dead, no point-in-time path to pre-2022 OAS exists anywhere on FRED. Ruled
+out a Moody's-proxy substitute (BAA10Y is daily since 1986 but only covers
+the IG name; HYG/JNK/EMB stay dead, and dropping below 10 names silently
+degenerates `validation/canaries.py`'s hardcoded `min_names=10` default —
+the exact problem D35 kept TIP in-sleeve to avoid). Confirmed the
+TIP/breakeven tenor question I'd flagged as a secondary snag is **already
+closed by D35** (breakeven = nominal-minus-real means TIP needs no
+breakeven series at all, just DGS7 minus the 3mo bill) — dropped that
+non-fork from the presentation. Zero trials consumed; ledger untouched;
+logged as **D36** (architect finding, pending operator direction).
+
+**Two live options identified, presented to the operator (not decided
+silently, per the org-level "present forks" instruction):**
+1. Defer Tier-2 carry, log the blocker, return to Phase 3 with S1+S2
+   (already graduated, D23) — zero new spec, zero trial cost.
+2. Freeze a narrower v3 spec testing the 6-name TREASURY-ONLY leg (reverting
+   D32's credit-leg broadening), with two defects pinned ex-ante if chosen:
+   a <10-name sleeve breaks the frozen canary suite's hardcoded default, and
+   the tenor-mapping rule collapses 6 names to only 4 distinct carry values
+   every date (IEF/TIP tie at tenor=7 — the tie D35's addendum already
+   predicted, now confirmed live).
+
+No FRED data pulled, no S5_carry construction written, no ledger row logged.
+Awaiting operator decision.
+
+## 2026-07-11 — Operator round 3: keep the credit leg, build a yfinance proxy (D37-D38); EXP-004 v3 frozen
+
+Operator's read on D36: carry is rated the strongest candidate signal in the
+literature (D6), so losing the credit leg to a data-access problem is worse
+than the cost of building a careful substitute. Chose neither literal D36
+option — not a full defer, not treasury-only — but a third path: **D37**,
+build a yfinance-derived proxy for the credit leg (LQD/HYG/JNK/EMB), keeping
+all 10 names, with the explicit instruction to "do the construction properly
+to avoid the noise."
+
+**Construction designed:** each credit name's trailing-twelve-month (TTM)
+distribution yield (sum of ex-dividend distributions over the trailing 366
+days ÷ raw non-dividend-adjusted close) minus a duration-matched treasury
+CMT yield (LQD 7.88y->7y tenor, HYG 2.91y->3y, JNK ~3.08y->3y, EMB
+6.61y->7y — funds' durations looked up the same way as the treasury leg's).
+TTM chosen deliberately as the external, industry-standard fund-yield
+convention (Morningstar/ETF.com), not a window tuned against this signal's
+IC. Treasury leg unchanged from v2.
+
+**Design-reviewer consult (Fable, D27) on the full draft, before writing
+anything to `specs/`.** Verdict: REFINE. Caught one real factual error in my
+first draft — I'd claimed "verified: no splits" for the 4 credit ETFs; JNK
+actually had a 1-for-3 reverse split on 2019-05-06 (harmless to the
+construction once checked: yfinance back-adjusts both price and dividends
+to the same basis, so the TTM ratio is split-invariant, but the false
+"verified" claim itself was exactly the kind of defect the mission's
+evidence discipline exists to catch). Also: re-sourced LQD's duration
+directly from iShares (7.88y, I'd only had a sibling-fund proxy), confirmed
+duration-matching the treasury subtraction (not just the 3mo bill) is the
+right call to avoid re-absorbing term premium, found a real gap in holdout
+storage (raw yfinance inputs weren't covered, only derived carry), corrected
+the disclosed-limitation's episode attribution from an assumed "credit
+stress periods" framing to the actually-measured cause (year-end special
+distributions — JNK 2010-12-29, EMB 2018-12-18, both ~3-5x typical), and
+added ex-date-count diagnostics as a data-quality detector. All incorporated.
+
+**D38 (operator decision, AskUserQuestion):** for holdout-period storage of
+the new yfinance-derived data, chose a SECOND independent lockbox
+(`data/lockbox_carry/`, a new token `/workspace/OPERATOR_TOKEN_CARRY.txt`)
+over design-reviewer's D18-pattern alternative (retain nothing, recompute at
+Phase 6). Keeps holdout carry bit-reproducible now; costs a second token to
+secure and a future logged `final_eval.py` change at Phase 6 (not needed
+today).
+
+**`specs/EXP-004-tier2-carry-ic-screen-v3.md` frozen** — supersedes v2
+(infeasible, not wrong). Same hypothesis, same graduation rule, same
+min_names=10, same planned trial count (1, `EXP-004-S5_carry`, budget
+8/250->9/250). No FRED or yfinance data pulled yet; no ledger row logged.
+
+**Next: actual implementation** — confirm remaining FRED series (already
+mostly done pre-blocker), build the combined data pull (FRED treasury +
+yfinance credit), construct S5_carry, run the confirmatory test + all
+diagnostics, lockbox holdout rows into the new `data/lockbox_carry/`, audit,
+log, commit.
+
+## 2026-07-11 — EXP-004 executed against v3: a units bug, then a graduating result that is not what it appears to be
+
+**Implementation.** `research/exp004_tier2_carry/run_exp004.py`: FRED treasury
+leg (`fred_asof`, t-1 business-day lag / 5-business-day staleness cap, same
+convention as v2) + yfinance credit leg (`ttm_yield_and_coverage`: trailing
+366-day ex-dividend distribution sum, at cutoff `t-1bd`, divided by raw
+non-dividend-adjusted close, floored at 8 distinct ex-dates in-window).
+Smoke-tested both pieces on real data before the full run (fred_asof against
+a hand-checked DGS7 window; JNK's TTM yield confirmed continuous across its
+2019-05-06 1-for-3 reverse split, as the spec's split-invariance argument
+predicted).
+
+**First run — a real bug, caught by my own pre-audit, not by a subagent.**
+Stated a 5-10 minute duration estimate (matching the spec) and ran the full
+battery: **S5_carry FAILED**, mean_ic=-0.050, t_nw=-2.403 — significant in
+the WRONG direction. But the leg-attribution diagnostic showed BOTH legs
+individually PASSING on their own (treasury t=2.09, credit t=2.02) — a sign
+flip on combination is exactly the kind of surprise the mission's "surprise
+= suspicion" principle exists for, so I checked before reporting anything.
+Root cause, found directly: a UNITS BUG. FRED Treasury CMT yields are
+percentage POINTS (DGS7≈4.40, meaning 4.40%); my TTM yield was a raw decimal
+FRACTION (≈0.05, meaning 5%). `credit_carry = ttm_yield - matched_cmt`
+subtracted a ~2-7-point FRED number from a ~0.03-0.09 decimal, so
+credit_carry collapsed to ≈`-matched_cmt(t)` — an accidental, sign-flipped
+proxy for treasury yield LEVELS, carrying essentially none of the intended
+credit information. Confirmed via a direct rank check: LQD averaged rank
+1.00 (ALWAYS lowest of 10), TLT averaged rank 10.00 (ALWAYS highest) — a
+complete, zero-overlap partition between the two legs, impossible for a
+genuine carry signal and a dead giveaway of a unit-scale artifact.
+
+**Fix:** multiply TTM yield by 100 before subtracting (`run_exp004.py:99`,
+with an inline comment recording what happened and pointing here). Re-ran;
+the rank distribution is now sane and interleaved across legs (no fixed
+partition), and values are economically plausible (JNK/HYG highest carry,
+SHY lowest, exactly as expected).
+
+**Ledger handling of the buggy run (a judgment call, made deliberately, not
+by default):** the buggy run's ledger row (`EXP-004-S5_carry`,
+config_hash=`00d95153d4af`, mean_ic=-0.050) is NOT deleted — the mission's
+"log every trial including discards" principle is explicit that a real
+execution against real data counts, bug or not; deleting it would look like
+quietly discounting an inconvenient trial from the DSR-relevant count. The
+corrected run is logged as a SECOND, distinct row (config_hash=`866821022d35`
+via a `construction_rev` marker added specifically so the ledger's own
+dedup-by-id logic wouldn't silently treat the fix as "just a
+reproducibility re-run"). **Budget correction: this experiment consumes 2
+trials, not the 1 the frozen spec estimated (8/250 -> 10/250, not 9/250)** —
+the spec's trial-count estimate could not have anticipated a mid-experiment
+bug fix; disclosing the discrepancy here rather than silently using the
+spec's stale number.
+
+**Second (corrected) run — S5_carry PASSES graduation, but the passing
+number is not what it looks like.** mean_ic=0.100, t_nw=5.746,
+pct_years_positive=92.9% — by a wide margin the strongest result in the
+project's history (EXP-001's S1/S2: t=3.92/3.16; EXP-003's S1_timing: a
+marginal t=2.37). Per Sec3.3f, an unusually strong result is presumed a
+defect until disproven, not celebrated — so before telling the operator
+anything, I checked the static/timing decomposition already required by the
+frozen spec: **static component t_nw=4.81 (essentially all of the raw
+signal's strength, raw-vs-static correlation 0.88); timing component
+t_nw=-1.08, NEGATIVE and not significant, 46% years positive (worse than a
+coin flip).** The raw signal also FAILS the time_shift canary (base_t=5.75,
+lagged_t=5.08 — barely decayed at all under a 26-week shift).
+
+**Writer≠verifier audits (both fresh-context, given only the code/results/
+spec, not this reasoning).** `reviewer`: **REQUEST-CHANGES** — independently
+reproduced the confirmatory number bit-identically from a fresh FRED/
+yfinance pull (confirms the number itself is real and correctly computed,
+not a run-environment artifact); found 3 blocking records defects (detailed
+below) and 3 non-blocking construction nits (TTM window anchored ~1-3
+calendar days earlier than the spec's literal wording; the raw-close
+denominator's `ffill(limit=3)` permits ~3 REBALANCES stale, not 3 days,
+since it operates on the already-weekly-reindexed series, and isn't itself
+pinned in the spec — both immaterial to the result, disclosed here rather
+than fixed-and-rerun to avoid manufacturing a third trial for a cosmetic
+deviation). `leak-hunter`: **CONCERNS-FOUND** — PIT/look-ahead clean
+(empirical truncation attacks at 2015-12-31 and 2019-12-31 bit-identical,
+max diff 0.0), quarantine clean, decomposition usage confirmed correct
+(identity holds to 4.4e-16). The substantive finding, independently derived
+(I did not tell leak-hunter my own read of the decomposition before it
+ran): **rank-stability analysis on the 680 confirmatory dates shows
+week-over-week rank autocorrelation of 0.989 — near-total persistence. A
+LITERALLY CONSTANT signal (each name's full-sample mean carry, held fixed
+on every date) scores t_nw=5.33, 85.7% years positive — 98% of the raw
+signal's mean IC, correlation 0.966 with the real, time-varying signal's IC
+series.** S5_carry contains essentially zero per-date discriminating
+information: the t=5.75 is the t-stat of ONE constant, persistent bet (long
+JNK/HYG/EMB/TLT — high-carry/higher-duration/credit names; short SHY/AGG/
+BND — low-carry/safe names) held through the single 2009-2021 credit-and-
+duration bull regime, with Newey-West(2) treating 680 weekly
+quasi-independent-looking observations that are economically closer to one
+regime-length observation. leak-hunter independently re-ran the canary
+suite and confirms `all_passed=False` for the raw signal, which per Sec3.3d
+means **S5_carry does not reach "validated" status despite clearing the
+graduation math** — the pre-registered numeric rule and "validated" are not
+the same thing, and this is the clearest case yet in the project of that
+distinction actually mattering.
+
+**This is the D29-named risk, arriving exactly as warned.** D29's rationale
+cites "the unconditional risky-beats-safe ordering" as "the project's
+single largest known risk" (from the 2026-07-10 Fable consult). S5_carry's
+entire graduating edge is that risk, measured directly: a static tilt
+toward duration/credit exposure that worked over one specific post-crisis,
+low-rate, spread-compression regime — precisely the ordering the 2022-start
+holdout is known to have inverted (2022 was the year long-duration bonds
+AND credit both fell together while cash/short-duration held up best). This
+is not a new discovery of the risk in the abstract — it is that risk
+showing up, concretely, inside a pre-registered confirmatory test, mechanically
+clearing the same numeric gate S1/S2 cleared for better reasons.
+
+**Records defects found by the audits, being corrected now (not
+construction bugs, no new trial required):**
+1. The second (FRED-carry) lockbox was built during the BUGGY first run
+   (`research/lockbox_access.log` timestamp matches the buggy run, not the
+   corrected one) and never rebuilt — the corrected run hit `FileExistsError`
+   (by the same one-shot design as the price-panel lockbox) and its
+   corrected payload was never written. The ledger's second row cites that
+   unwritten sha as if it were stored — misleading, now flagged. Needs the
+   operator to delete the stale lockbox+token pair (same D17/D21-precedent
+   mechanism) before a corrected lockbox can be built; not something I can
+   do myself (quarantine-guard-blocked, by design).
+2. This entry itself closes reviewer's "dangling citation" finding — the
+   code comment referencing "the diagnostic that caught this" pointed to a
+   journal entry that didn't exist yet at review time. It exists now.
+3. Trial budget corrected above (10/250, not the spec's stale 9/250
+   estimate).
+4. `specs/EXP-004-tier2-carry-ic-screen-v3.md` was uncommitted at audit
+   time (weaker freeze-timing evidence than EXP-003's git-anchored
+   precedent, per leak-hunter) — will be committed together with this round.
+
+**Audit verdicts logged** to `research/audit_log.jsonl` (both entries,
+verbatim summaries above).
+
+**Design-reviewer consult (Fable, D27) on characterization — REFINED two
+things I had wrong in the paragraphs above, before this reached the
+operator:**
+1. **Not "falsified."** The frozen spec's falsification clause was not
+   triggered — all three legs of the graduation rule passed. Declaring
+   falsification post-hoc because the pass is hollow would be goalpost-
+   moving in the honest direction, but still goalpost-moving, and would
+   corrupt the ledger's meaning. The hypothesis as pre-registered was
+   **confirmed**; what's in question is what that confirmation is worth.
+2. **Not "fails to reach validated status" as though that's a stage it
+   missed.** Canaries are diagnostic/non-blocking FOR GRADUATION (D30);
+   "validated" is a strategy-level status (Phase 5/6) no signal reaches at
+   Phase 2 — S1/S2 aren't "validated" either. Graduation and validation were
+   never the same gate; this is just the first result where the gap between
+   them is load-bearing. Correct framing: S5_carry graduates under the
+   frozen rule (real, PIT-clean, independently reproduced number); the
+   spec's own required diagnostics show the graduating edge is a static
+   tilt, not carry-timing information (static t=4.81, timing t=-1.08
+   negative, a literally constant per-name signal reproduces 98% of the
+   IC); this is D29's named risk arriving inside a passing confirmatory
+   test; its raw form could not survive Phase 5 while the canary trip
+   stands.
+3. **Regime correction:** 2008 (partial coverage — the sleeve isn't fully
+   eligible until 2008-12-17) is actually the single best year in the
+   window (IC +0.478), plausibly a late-2008 duration rally on thin early
+   coverage — say "2008(partial)-2021," not "the 2009-2021 regime."
+4. **A finding that outlives S5, worth surfacing on its own:** the
+   constant-signal control (a literally time-invariant per-name ordering
+   scoring t=5.33, 98% of the real signal's IC) demonstrates the Phase-2
+   graduation rule (mean_ic/t_nw/pct_years_positive) has a measured blind
+   spot for slow, persistent signals — it cannot distinguish genuine
+   evolving relative-attractiveness information from a fixed bet that
+   happened to pay over the sample. This is a candidate methodology
+   refinement (e.g., report a constant-signal control alongside every
+   future graduation screen) for a FUTURE operator decision — not something
+   to apply unilaterally, and NOT retroactive to S1/S2 (outside D30's
+   scope).
+5. **D34 evidence, the number that actually matters for the book-identity
+   fork:** S5_static correlates 0.55 with S1_static and 0.56 with S2_static
+   — the new FRED/yfinance dependency bought a static tilt that is HALF
+   SHARED with the tilt S1/S2 already carry. Some diversification, same
+   risk family, not fully new breadth.
+6. **Next step, design-reviewer's recommendation:** reject re-opening
+   S5_carry's construction (no defect found by either audit; any change
+   hits the spec's locked-dial list; a new trial would spend budget to
+   relearn a known property of the asset class, not learn something new).
+   S5_carry is closed as a timing signal. The narrow question left for the
+   operator: does S5_static enter the Phase-3 candidate set as an
+   explicitly-labeled static-tilt sleeve (0.55/0.56 correlation and the
+   2022-inversion risk disclosed up front), or is it shelved as D34
+   evidence only, with Phase 3 proceeding on S1+S2 alone?
+
+Next: log this characterization as a decision row, then present to the
+operator — three items (the corrected finding + D29 risk manifestation,
+the D34 disposition question, and the stale-lockbox rebuild that needs
+operator action) per the §7 pause bar design-reviewer confirmed is met.

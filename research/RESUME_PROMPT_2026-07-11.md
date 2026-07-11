@@ -1,156 +1,102 @@
 Resume Gordian v2. Read CLAUDE.md and FABLE_MISSION.md in full, then read
-research/journal.md and research/decisions.md (through **D35**) to confirm
+research/journal.md and research/decisions.md (through **D36**) to confirm
 current state before doing anything. Repo: /workspace/algo-trading-bot,
-branch `research/gordian-v2`, last commit **4c4d489** (working tree was
-clean, everything pushed, as of 2026-07-11).
+branch `research/gordian-v2`, last commit **cf9ae6b**. Working tree has
+UNCOMMITTED doc-only changes as of this pause (`research/decisions.md`,
+`research/journal.md`, `research/lockbox_access.log` — the last is just an
+auto-appended benign BLOCKED-attempt audit line from a quarantine-guard hit,
+not a real access). No code changes, no data pulled, nothing to lose by
+picking this up in a fresh session; do not discard these edits.
 
-## What happened last session (summary — full detail is in journal.md)
+## Where this session stopped: EXP-004 is BLOCKED, operator decision pending
 
-1. Applied D27 (standing design-reviewer consult) at the start of the
-   session on the open items (A-E) inherited from the prior resume prompt,
-   before presenting anything to the operator.
-2. Operator decided (AskUserQuestion): D28 (FRED carry green-lit,
-   sequenced after a cheap no-new-data diagnostic first), D29 (decline
-   sign-flip rescues, with a prior-exposure clause), D30 (add the canary
-   suite as a diagnostic, non-blocking leg of signal graduation).
-3. Pre-registered and ran **EXP-003** (S1/S2 static-vs-timing
-   decomposition, `specs/EXP-003-s1-s2-timing-decomposition.md`):
-   **S1_timing PASSES** graduation (t_nw=2.372, the weakest graduating
-   t-stat in the project so far); **S2_timing FAILS** on the t-stat leg
-   alone (1.750 vs 2.0) — a near-miss null, NOT a demonstrated absence of
-   timing information (its confidence interval contains both zero and
-   S1's value). Both timing components fail the diagnostic time_shift
-   canary with the lagged t-stat EXCEEDING live — mechanistically
-   root-caused by leak-hunter as benign "tilt re-injection" (subtracting a
-   slowly-updated expanding mean re-acquires part of the static tilt under
-   a shift), confirmed via bit-identical truncation attacks to need no
-   future information.
-4. Audited by reviewer (APPROVE) and leak-hunter (CLEAN across all 8
-   refutation axes; leak-hunter's first attempt failed mid-run on a
-   session/API limit — a clean retry succeeded. Treat any such background-
-   agent failure as routine and just retry; it isn't a signal something is
-   wrong with the work itself).
-5. A design-reviewer consult on the EXP-003 result REFINED the architect's
-   first-pass characterization before it reached the operator — most
-   importantly correcting an overclaim ("S2 is almost entirely static
-   tilt" was not actually supported by the data; the CI is too wide).
-6. Operator decided three more items (AskUserQuestion): **D32** (broaden
-   EXP-004's carry construction to include FRED credit-spread data for
-   LQD/HYG/JNK/EMB, not just the treasury curve — presented as a genuine
-   fork per the "present, don't pick silently" instruction, since a
-   treasury-only construction would mostly re-test duration/term-premium
-   rather than genuine cross-asset carry), **D33** (ratify a two-condition
-   rule for interpreting time_shift trips on residual-class signals going
-   forward — attributable to a benign mechanism only if an identity
-   decomposition quantitatively accounts for the gap AND a truncation
-   attack confirms no look-ahead; otherwise treated as a live trip. Has
-   BLOCKING force at Phase 5 for any residual-class signal in the eventual
-   book), **D34** (book identity: blend the static-tilt and
-   timing-residual contributions and report them separately, defer the
-   final trade-vs-strip choice until more evidence exists).
-7. Drafted the **EXP-004** (Tier-2 carry) pre-registration. First draft
-   (`specs/EXP-004-tier2-carry-ic-screen.md`, now ABANDONED) had two real
-   errors a design-reviewer consult caught before any data was touched: a
-   TS-z-score construction that would have quietly tested carry-*timing*
-   instead of raw carry (per-asset z-scoring against an expanding history
-   IS `src/decomposition.py`'s residual operation), and a holdout-period
-   FRED storage rationale that inverted its own train/val-vs-holdout
-   mirror logic and silently contradicted D18. Corrected in
-   `specs/EXP-004-tier2-carry-ic-screen-v2.md` (**the active, frozen
-   spec**): level-based excess-carry construction (Treasury CMT minus
-   3-month bill; OAS directly for credit names), holdout FRED lockboxed
-   per the existing D12/D21 mechanism (not clear-text), a pinned
-   publication-lag buffer (t-1 business day, 5-day max staleness), pinned
-   AGG/BND/TIP duration-tenor mapping. A second, narrower verification
-   consult found one further correction (logged as **D35**, an addendum in
-   decisions.md, not a v3 spec file): the "breakeven adjustment" for TIP
-   is an exact arithmetic identity for the nominal Treasury yield at that
-   tenor, not a genuinely separate data source — and TIP's duration is
-   close enough to IEF's that they may permanently rank-tie on some/all
-   dates (disclosed, power-reducing, not engineered around).
+This session began implementing EXP-004 (Tier-2 carry) per the frozen
+`specs/EXP-004-tier2-carry-ic-screen-v2.md`. **Before any FRED data was
+pulled or any construction code written**, live verification of the exact
+FRED series IDs (the spec's own required implementation-time step) turned up
+a real, verified blocker:
 
-**No FRED data has been pulled. No real computation has run against the
-EXP-004 spec.** Last session's work was entirely pre-registration/design;
-this session is where implementation starts.
+- **Treasury leg is fine.** Nominal CMT (DGS3MO/6MO/1/2/3/5/7/10/20/30) and
+  TIPS real CMT (DFII5/7/10/20/30) both have long, clean daily history.
+  Fund effective durations looked up from current issuer fact sheets
+  (WebSearch, dated sources): SHY ~1.9-2.0y, IEF 7.2y, TLT 15.20y
+  (2026-07-08), AGG 5.78y (2026-03-31), BND ~5.7-5.8y, TIP 6.41y
+  (2026-03-31). Frozen nearest-tenor rule maps: SHY->2, IEF->7, TLT->20,
+  AGG->5, BND->5, TIP->7 (IEF/TIP tie, already predicted by D35's addendum).
+- **Credit leg is BLOCKED.** FRED's ICE BofA OAS series (IG: BAMLC0A0CM, HY:
+  BAMLH0A0HYM2, EM: BAMLEMCBPIOAS, and every rating-bucket variant checked)
+  all first-observe **2023-07-11** — confirmed via direct `fred.get_series()`
+  pulls, not just search metadata. This is FRED/ICE's documented 2022
+  licensing event: FRED dropped historical vintages of ICE-sourced index
+  data and now carries only a rolling ~3-year trailing window (2023-07-11 is
+  exactly "today minus 3y" — the gap never closes by waiting). ALFRED
+  vintage archives were also checked (`get_series_as_of_date`,
+  `get_series_all_releases`) and confirmed equally truncated — no
+  point-in-time rescue exists anywhere on FRED.
+- **Consequence:** 2023-07-11 onward sits entirely inside the frozen holdout
+  (2022-01-01..2026-06-30, D8). The credit leg has ZERO usable dates on
+  train/val, so the `min_names=10` confirmatory test — and even the
+  `min_names=4` credit-only leg-attribution diagnostic — cannot score a
+  single pre-holdout date. This is a data-infeasibility wall, not a weak
+  result. Logged as **D36** (architect finding, zero trials consumed,
+  ledger untouched).
 
-## This session's task: implement and run EXP-004
+**Design-reviewer consult (Fable, D27 standing rule) ran on this finding**
+before it went to the operator: verdict ENDORSE-the-pause / REFINE-the-options.
+Independently re-verified everything above, additionally ruled out a
+Moody's-proxy substitute (BAA10Y only rescues the IG name; HYG/JNK/EMB stay
+dead; dropping below 10 names silently degenerates `validation/canaries.py`'s
+hardcoded `min_names=10` default — the exact problem D35 kept TIP in-sleeve
+to avoid), and confirmed the TIP/breakeven tenor question is already fully
+closed by D35 (not a new fork — dropped from the presentation).
 
-Per `specs/EXP-004-tier2-carry-ic-screen-v2.md` (+ the D35 addendum in
-decisions.md) — this is a fully-specified, frozen construction; the task is
-implementation, not further design:
+**Presented to the operator as a genuine fork (AskUserQuestion, not decided
+silently), with two live options:**
+1. **Defer Tier-2 carry, return to Phase 3.** Log the blocker (already done,
+   D36), abandon the credit leg for now, go build the Phase-3 M0 combiner on
+   S1+S2 (already graduated, D23). Zero new spec, zero trial cost.
+   Design-reviewer's recommendation.
+2. **Narrow to a 6-name treasury-only v3 spec**, reverting D32's credit-leg
+   broadening. Two defects must be pinned ex-ante if chosen: (a) a 6-name
+   sleeve breaks the frozen canary suite's hardcoded `min_names=10` default
+   — needs a resolution before this is runnable; (b) the tenor-mapping rule
+   collapses 6 names to only 4 distinct carry values every date (SHY=2,
+   AGG=BND=5, IEF=TIP=7, TLT=20). Design-reviewer's read: probably not worth
+   one of the 250 trials given how coarse this is, but operator's call.
 
-1. **FRED API access is fully configured and tested — nothing to set up,
-   just start building.** The operator provided a key; it's stored as
-   `FRED_API_KEY` in `/workspace/activate.sh` (added 2026-07-11, outside
-   the git repo, never committed — `source /workspace/activate.sh` loads
-   it, same existing pod-restart step, nothing new). The key was verified
-   live against the real API this session (fetched a real DGS10
-   observation via both a raw REST call and the installed client
-   library). `fredapi==0.5.2` is installed in the project venv and pinned
-   in `requirements.lock.txt` (already flagged/logged this session — same
-   dependency tier as `yfinance`; the underlying FRED *data* dependency
-   itself was approved at D28/D32, this was just the client library).
-   Nothing here needs re-verifying — go straight to building the actual
-   EXP-004 data pull.
-2. Confirm the exact FRED series IDs for: nominal Treasury CMT yields at
-   the tenors the spec's duration-mapping rule selects for SHY/IEF/TLT/
-   AGG/BND/TIP, the 3-month T-bill, and ICE BofA OAS indices for IG/HY/EM
-   credit (LQD / HYG,JNK / EMB) — the spec deliberately left exact tickers
-   for implementation-time verification, not guessed at design time.
-   Record each fund's published effective duration (the number the
-   tenor-mapping rule needs) and the confirmed series IDs in the
-   implementation itself, not just in scratch analysis.
-3. Build the data pull: full history (train/val + holdout, for §3.3b
-   reproducibility), point-in-time as-of merge (t-1 business day lag,
-   5-day max staleness per the spec), holdout-period rows (2022-01-01
-   onward) encrypted into the lockbox via
-   `validation.lockbox.build_lockbox` — NOT kept in a clear working file
-   (this corrects a mistake in EXP-004 v1; don't repeat it).
-4. Construct S5_carry exactly per the frozen spec: level-based excess
-   carry per name, ranked cross-sectionally within the bond sleeve
-   (`min_names=10`, explicitly passed — do not silently rely on a default
-   parameter coinciding with the intended value, a mistake corrected last
-   session).
-5. Run the confirmatory IC/graduation test (1 planned trial,
-   `EXP-004-S5_carry`) plus the descriptive/diagnostic legs the spec
-   requires: leg attribution (`min_names=6` treasury / `min_names=4`
-   credit, explicitly overridden), the static/timing decomposition
-   (reusing `src/decomposition.py` unchanged), canaries on both raw and
-   timing (pre-declared expected signature + the D33 two-condition
-   adjudication test), and correlation vs S1/S2's own static/timing legs.
-6. State a duration estimate before running anything non-trivial (§3.6) —
-   the spec estimates 3-6 minutes for the full battery on this 10-name
-   sleeve's shorter effective window, scaling down from EXP-003's 11m44s;
-   flag if actual runtime diverges 2x+.
-7. Writer≠verifier: fresh-context reviewer + leak-hunter audits before
-   committing, same as every prior experiment. Apply D27 (standing
-   design-reviewer consult) at this phase boundary and again once a real
-   result exists — do not wait for it to feel like "presenting," per the
-   standing rule.
-8. Log the audit verdicts to `research/audit_log.jsonl` before committing
-   (the `audit_gate` hook requires this mechanically).
+**The operator has not yet answered this question — hit a token/time limit
+and asked to pause, resuming in ~3 hours (this same conversation may simply
+continue; if instead this is a fresh session reading this file, re-ask the
+same AskUserQuestion above before doing anything else).** Do NOT pick an
+option unilaterally. Do NOT attempt a third rescue option (e.g. a different
+data source, a shrunk-window test, silently patching `min_names`) without
+routing it through the operator the same way — every rescue either reverts
+an operator-approved decision (D32), substitutes a data family never
+approved (D28/D32 named FRED specifically), or silently breaks frozen
+validation code.
 
 ## Notes for whichever model drives this session
 
-- Two stray Agent calls with literal "placeholder" content appeared
-  mid-way through last session — root-caused as the prior driver's own
-  erroneous pattern for yielding a turn while waiting on a background
-  task (not an external anomaly, despite an initial, incorrect suspicion
-  of prompt injection). If you're waiting on a background task, just end
-  your turn with plain text — no tool call needed.
-- Background subagents can fail mid-run on session/API limits (happened
-  once to leak-hunter last session) — retry cleanly, it isn't a signal
-  anything is wrong with the audit itself.
-- `specs/` files freeze the instant they're written (the quarantine guard
-  blocks further Edit/Write regardless of review status, not just after
-  an explicit freeze step) — if a drafted spec needs correction before
-  its first real run, write a new versioned file (`-v2`, `-v3`, ...)
-  rather than trying to edit the original, matching the
-  `REFEREE-SELFTEST-v2` and `EXP-004-...-v2` precedents.
-- The quarantine guard's Bash write-heuristic produced several false
-  positives last session on read-only commands that merely CONTAIN a `>`
-  character (e.g. in an email like `<noreply@...>`, or a mathematical
-  comparison like `lagged_t>base_t`) combined with a `specs/`/
-  `validation/` path mention elsewhere in the same command string. If a
-  read-only Bash command gets blocked, rephrase to remove `>` or split
-  the command rather than assuming something is actually wrong.
+- Two stray Agent calls with literal "placeholder" content appeared during
+  the 2026-07-10/11 session — root-caused as a prior driver's own erroneous
+  pattern for yielding a turn while waiting on a background task, not an
+  external anomaly. If waiting on a background task, just end the turn with
+  plain text — no tool call needed.
+- Background subagents can fail mid-run on session/API limits — retry
+  cleanly, it isn't a signal anything is wrong with the work itself.
+- `specs/` files freeze the instant they're written (quarantine guard blocks
+  further Edit/Write regardless of review status) — a v3 spec (if option 2
+  is chosen) must be a new versioned file, matching the
+  `REFEREE-SELFTEST-v2`/`EXP-004-...-v2` precedents.
+- The quarantine guard blocks ANY tool call whose path/command blob mentions
+  `data/lockbox` or `OPERATOR_TOKEN` (except a Bash command literally
+  invoking `validation/final_eval.py`) — this is real enforcement, not a
+  false positive, confirmed again this session (a plain `ls -la
+  data/lockbox/` was correctly blocked). Don't retry or work around it;
+  scripts that only *import* `validation.lockbox` from within a Python file
+  (not naming the path in the Bash command string itself) are unaffected,
+  matching how `src/panel_factory.py` already does it.
+- The guard's Bash write-heuristic can false-positive on read-only commands
+  that merely contain a `>` character alongside a `specs/`/`validation/`
+  path mention elsewhere in the same command string — rephrase rather than
+  assume something is wrong.
