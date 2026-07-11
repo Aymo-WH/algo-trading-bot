@@ -1110,3 +1110,87 @@ launched ones (agentIds ending `...abc21af7fe8910f6f` [failed retry],
 `research/exp003_timing_decomposition/{run_exp003.py,results.json}`, 2 new
 `research/experiments.jsonl` rows, 2 new `research/audit_log.jsonl` entries,
 `research/decisions.md` (D31), this journal entry.
+
+## 2026-07-11 — Operator round 2: book identity, canary rule, carry scope (D32-D34); EXP-004 spec drafted, corrected twice, frozen (D35)
+
+Operator answered the three open items from the prior entry, all via
+AskUserQuestion, logged as **D32** (broaden EXP-004's carry construction to
+include FRED credit-spread data for LQD/HYG/JNK/EMB, not just the treasury
+curve -- presented as a genuine fork per the org-level "present, don't pick
+silently" instruction, since a treasury-only construction would mostly
+re-test duration/term-premium rather than genuine cross-asset carry),
+**D33** (ratify the two-condition canary-interpretation rule for
+residual-class signals going forward, with blocking force at Phase 5), and
+**D34** (blend the static-tilt and timing-residual book identity, report
+both separately, defer the final trade/strip choice).
+
+**EXP-004 spec drafting.** First draft (`specs/EXP-004-tier2-carry-ic-screen.md`)
+attempted a TS-z-score construction to make yield-level and spread-level
+carry comparable across legs. A design-reviewer consult (REFINE, blocking)
+found this was a real, non-obvious error: per-asset TS z-scoring against an
+expanding history IS `src/decomposition.py::expanding_static_timing`'s
+residual operation, so the "raw" signal was already a timing-like object --
+this would have made the static/timing decomposition diagnostic near-
+circular, misdirected the correlation diagnostic, and mismatched the
+pre-declared canary expectation. The same consult found the proposed
+holdout-period FRED clear-storage rationale had INVERTED its own mirror
+argument (train/val prices clear + holdout prices locked implies train/val
+FRED clear + holdout FRED locked -- the draft concluded the opposite) and
+silently contradicted D18 without citing it; flagged unaddressed
+publication-lag/point-in-time handling; and left the AGG/BND duration-
+mapping unpinned.
+
+Because `specs/` files freeze on creation (the quarantine guard blocks any
+further Edit/Write the moment a file exists, regardless of review status --
+not just after an explicit freeze step), the first draft could not be
+patched in place. Following the `REFEREE-SELFTEST-v2` precedent, wrote a
+new versioned file, `specs/EXP-004-tier2-carry-ic-screen-v2.md`, marking v1
+explicitly abandoned/superseded before any FRED data was pulled or any real
+computation happened (squarely inside normal Explore-then-Plan iteration,
+not post-hoc goalpost-moving -- nothing had run yet). v2: level-based excess
+carry (Treasury CMT minus 3-month bill; OAS directly for credit names)
+restoring a genuine raw-carry test; holdout FRED lockboxed via the existing
+D12/D21 mechanism, correcting course back to D18's principle rather than
+departing from it; a pinned as-of merge for publication lag (t-1 business
+day, 5-day max staleness); a pinned AGG/BND/TIP duration-tenor mapping rule.
+
+**TIP handling required resolving a tension the first consult's own two
+recommendations left unstated:** it suggested both "maybe drop TIP to a
+9-name sleeve" (part of the construction fix) and "keep min_names=10
+unchanged" (to stay consistent with the frozen canary machinery) --
+`validation/canaries.py` calls `cross_sectional_ic` internally without
+passing `min_names`, always using the frozen module default of 10, so a
+9-name sleeve would make the entire canary suite silently return
+degenerate (falsely-passing) results, not visibly broken ones. Resolved by
+keeping TIP in a 10-name sleeve via a nominal-equivalent construction
+(TIPS real yield + matched breakeven inflation), flagged transparently as
+an additional FRED series.
+
+A second, narrowly-scoped verification consult (not a full re-review, just
+checking the fixes) found 4 of 5 issues cleanly resolved, plus one further
+correction: FRED's breakeven series is DEFINED as nominal CMT minus TIPS
+real CMT at the same tenor, so "real yield + breakeven" is an exact
+arithmetic identity for the nominal CMT -- no third FRED series is actually
+needed, and the disclosed consequence (TIP's ~6.5-7y duration is close
+enough to IEF's ~7.5-8y that both may map to the same nearest tenor,
+creating a permanent rank tie on some/all dates -- power-reducing,
+disclosed, not engineered around) is now pinned. Logged as a decisions.md
+addendum (**D35**) rather than a v3 file, since it is a one-paragraph
+clarification with zero trial cost and no data pulled yet.
+
+**EXP-004 (v2 + the D35 addendum) is now the frozen pre-registration,
+ready for FRED implementation next** -- matching the operator's own choice
+("draft the spec now, ready to implement next"). No FRED data has been
+pulled; no real computation has happened. Planned trial count 1
+(`EXP-004-S5_carry`); budget would move from 8/250 to 9/250 once run.
+
+**Committed this round:** `research/decisions.md` (D32-D35),
+`specs/EXP-004-tier2-carry-ic-screen.md` (v1, abandoned),
+`specs/EXP-004-tier2-carry-ic-screen-v2.md` (v2, active), this journal
+entry. No code, no data pull, no ledger rows this round -- pure design/
+pre-registration work, consistent with "draft the spec now" being the
+authorized scope for this step.
+
+**Next session:** implement the FRED data pull (new dependency, per D28/D32
+-- point-in-time, full history, holdout rows lockboxed per D35), the S5
+carry construction, and run EXP-004 against the frozen v2 spec.
