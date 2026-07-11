@@ -79,19 +79,19 @@ Per `specs/EXP-004-tier2-carry-ic-screen-v2.md` (+ the D35 addendum in
 decisions.md) — this is a fully-specified, frozen construction; the task is
 implementation, not further design:
 
-1. **FRED API access is already configured — verify, don't re-set-up.**
-   The operator provided a key; it's stored as `FRED_API_KEY` in
-   `/workspace/activate.sh` (added 2026-07-11, outside the git repo, never
-   committed). Run `source /workspace/activate.sh` if it isn't already
-   sourced this session, then confirm `$FRED_API_KEY` is non-empty —
-   check only that it exists (e.g. via its length), don't print the value
-   into any tool output or file. The `fredapi` package (or an equivalent
-   client) is NOT yet installed as of last session's end — install it as a
-   normal dependency (same tier `yfinance` already sits at, flag it per
-   CLAUDE.md's "flag any new dependency + its tradeoff"), not a new
-   operator-sign-off item: the underlying FRED *data* dependency itself
-   was already approved at D28/D32: this is just the client library to
-   reach it.
+1. **FRED API access is fully configured and tested — nothing to set up,
+   just start building.** The operator provided a key; it's stored as
+   `FRED_API_KEY` in `/workspace/activate.sh` (added 2026-07-11, outside
+   the git repo, never committed — `source /workspace/activate.sh` loads
+   it, same existing pod-restart step, nothing new). The key was verified
+   live against the real API this session (fetched a real DGS10
+   observation via both a raw REST call and the installed client
+   library). `fredapi==0.5.2` is installed in the project venv and pinned
+   in `requirements.lock.txt` (already flagged/logged this session — same
+   dependency tier as `yfinance`; the underlying FRED *data* dependency
+   itself was approved at D28/D32, this was just the client library).
+   Nothing here needs re-verifying — go straight to building the actual
+   EXP-004 data pull.
 2. Confirm the exact FRED series IDs for: nominal Treasury CMT yields at
    the tenors the spec's duration-mapping rule selects for SHY/IEF/TLT/
    AGG/BND/TIP, the 3-month T-bill, and ICE BofA OAS indices for IG/HY/EM

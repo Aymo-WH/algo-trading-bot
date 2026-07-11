@@ -1194,3 +1194,31 @@ authorized scope for this step.
 **Next session:** implement the FRED data pull (new dependency, per D28/D32
 -- point-in-time, full history, holdout rows lockboxed per D35), the S5
 carry construction, and run EXP-004 against the frozen v2 spec.
+
+## 2026-07-11 — FRED API access configured and verified (setup only, no data pulled)
+
+Operator provided a FRED API key. Stored as `FRED_API_KEY` in
+`/workspace/activate.sh` (outside the git repo, never committed -- the
+operator ran the append command directly; two attempts landed in the file
+with different values because the first `echo >>` produced no stdout and
+was assumed to have failed, so it was re-run -- confirmed with the operator
+which was correct, and the stale line removed by exact line number via
+`sed`, never by content-matching, so the key itself was never re-printed
+into a command or its output beyond the operator's own original message).
+
+Verified live against the real API (not just presence-checked): a raw
+REST call to `/fred/series/observations` for DGS10 returned real data
+(16,833 observations, earliest 1962-01-02); `fredapi==0.5.2` installed via
+`uv pip install --python /workspace/venv/bin/python fredapi` and
+smoke-tested end-to-end (fetched DGS10 for a real date range). Pinned in
+`requirements.lock.txt` (alphabetical position, no new transitive
+dependencies -- `requests`/`urllib3` were already pinned at the exact
+versions fredapi resolved to). `pytest tests/fast tests/data -q` ->
+**84 passed** after the install, confirming nothing broke.
+
+This is setup only: no FRED series data has been pulled or stored, no
+EXP-004 code has been written, no ledger row logged (nothing to log --
+installing a verified, already-approved dependency's client library is not
+itself a trial). `research/RESUME_PROMPT_2026-07-11.md` updated twice
+today to keep it accurate as state changed (git-tracked, so the diff is
+the record: key configured -> verified+installed).
