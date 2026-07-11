@@ -1,7 +1,7 @@
 Resume Gordian v2. Read CLAUDE.md and FABLE_MISSION.md in full, then read
 research/journal.md and research/decisions.md (through **D35**) to confirm
 current state before doing anything. Repo: /workspace/algo-trading-bot,
-branch `research/gordian-v2`, last commit **e8f3cb0** (working tree was
+branch `research/gordian-v2`, last commit **4c4d489** (working tree was
 clean, everything pushed, as of 2026-07-11).
 
 ## What happened last session (summary — full detail is in journal.md)
@@ -79,17 +79,19 @@ Per `specs/EXP-004-tier2-carry-ic-screen-v2.md` (+ the D35 addendum in
 decisions.md) — this is a fully-specified, frozen construction; the task is
 implementation, not further design:
 
-1. **Check FRED access first, before anything else.** As of last session's
-   end: no `FRED_API_KEY` env var, no `fredapi` package installed, no
-   existing FRED code anywhere in the repo. Before assuming an API key is
-   needed, check whether a keyless approach (`pandas_datareader`'s FRED
-   reader, or a direct CSV fetch from FRED's public graph-export endpoint)
-   is sufficient for the handful of series this needs — historically these
-   don't require a key for basic series downloads, unlike the full JSON
-   API `fredapi` wraps. **If a key genuinely turns out to be required,
-   that needs operator awareness before proceeding** — creating a FRED
-   account is an "external account" action per mission §7 (pause and ask,
-   don't sign up autonomously).
+1. **FRED API access is already configured — verify, don't re-set-up.**
+   The operator provided a key; it's stored as `FRED_API_KEY` in
+   `/workspace/activate.sh` (added 2026-07-11, outside the git repo, never
+   committed). Run `source /workspace/activate.sh` if it isn't already
+   sourced this session, then confirm `$FRED_API_KEY` is non-empty —
+   check only that it exists (e.g. via its length), don't print the value
+   into any tool output or file. The `fredapi` package (or an equivalent
+   client) is NOT yet installed as of last session's end — install it as a
+   normal dependency (same tier `yfinance` already sits at, flag it per
+   CLAUDE.md's "flag any new dependency + its tradeoff"), not a new
+   operator-sign-off item: the underlying FRED *data* dependency itself
+   was already approved at D28/D32: this is just the client library to
+   reach it.
 2. Confirm the exact FRED series IDs for: nominal Treasury CMT yields at
    the tenors the spec's duration-mapping rule selects for SHY/IEF/TLT/
    AGG/BND/TIP, the 3-month T-bill, and ICE BofA OAS indices for IG/HY/EM
