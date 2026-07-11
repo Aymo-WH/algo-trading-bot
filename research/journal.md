@@ -1526,3 +1526,26 @@ Next: log this characterization as a decision row, then present to the
 operator — three items (the corrected finding + D29 risk manifestation,
 the D34 disposition question, and the stale-lockbox rebuild that needs
 operator action) per the §7 pause bar design-reviewer confirmed is met.
+
+**Committed** (4964acd): `run_exp004.py`, `results.json`,
+`specs/EXP-004-tier2-carry-ic-screen-v3.md`, decisions D36-D39, this
+journal entry, both audit_log.jsonl entries. Fast+data suite green (84) at
+commit time. Lockbox rebuild deliberately NOT committed (still holds the
+buggy payload; untracked in git either way).
+
+**Operator round 4 — D40:** presented the D34 disposition question
+(shelve S5_static as evidence-only vs. include it in the Phase-3 candidate
+set, explicitly labeled). Operator chose **include**, explicitly labeled as
+a static risk-premium tilt with the 0.55/0.56 S1/S2-static correlation and
+the 2022-inversion risk (D29) carried into every downstream report on it —
+not shelved. Rationale: correlation ~0.55/0.56 is real, partial
+diversification (not a near-duplicate of S1/S2's own tilts), and Phase
+3-5's own gates (PBO/CSCV/DSR/cost-regime-stability) are the right place to
+judge a disclosed, honestly-labeled static tilt on its actual portfolio
+merit, rather than pre-filtering it out at Phase 2 on the strength of the
+D29 concern alone.
+
+**Phase-3 candidate set is now: S1 (momentum), S2 (TS trend), S5_static
+(carry, static-tilt-labeled).** Still requested, separately: operator
+action to clear the stale `data/lockbox_carry/` + `OPERATOR_TOKEN_CARRY.txt`
+pair so a corrected lockbox rebuild can happen — not yet done.
