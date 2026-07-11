@@ -130,7 +130,17 @@ def pull_credit_raw(tickers: list) -> dict:
     return out
 
 
-def main():
+def _build_lockbox_payload(s5_holdout, credit_raw):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("s5_carry_holdout.csv", s5_holdout.to_csv())
+        for name in CREDIT_NAMES:
+            z.writestr(f"{name}_raw_close_full.csv", credit_raw[name]["close"].to_csv())
+            z.writestr(f"{name}_dividends_full.csv", credit_raw[name]["dividends"].to_csv())
+    return buf.getvalue()
+
+
+def main(lockbox_only: bool = False):
     fred_key = os.environ.get("FRED_API_KEY")
     assert fred_key, "FRED_API_KEY not set -- source /workspace/activate.sh first"
     fred = Fred(api_key=fred_key)
@@ -186,6 +196,22 @@ def main():
     # --- split train/val (grading) vs holdout (lockbox only, never graded) ---
     s5_trainval = s5_full.loc[s5_full.index <= TRAINVAL_END]
     s5_holdout = s5_full.loc[s5_full.index >= HOLDOUT_START]
+
+    if lockbox_only:
+        # Housekeeping rebuild only (e.g. after the operator clears a stale
+        # lockbox+token pair) -- reuses the exact same construction as the
+        # full run, but skips the already-audited confirmatory/diagnostic
+        # battery to avoid re-spending ~10 minutes on canaries that don't
+        # need re-running. Does NOT touch results.json or the ledger.
+        payload = _build_lockbox_payload(s5_holdout, credit_raw)
+        import hashlib
+        payload_sha = hashlib.sha256(payload).hexdigest()
+        lockbox_dir = os.path.join(REPO, "data", "lockbox_carry")
+        token_path = "/workspace/OPERATOR_TOKEN_CARRY.txt"
+        enc_path = build_lockbox(payload, lockbox_dir=lockbox_dir, token_path=token_path)
+        print(f"lockbox_carry REBUILT: {len(payload)} plaintext bytes -> {enc_path} "
+              f"(sha256={payload_sha}); operator token written to {token_path}")
+        return 0
 
     window = rebal_all[(rebal_all >= PANEL_START) & (rebal_all <= TRAINVAL_END)]
     s5_window = s5_trainval.reindex(window)
@@ -338,4 +364,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import argparse
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--lockbox-only", action="store_true",
+                   help="rebuild the lockbox only (e.g. after the operator clears "
+                        "a stale enc/token pair); skips the confirmatory/diagnostic "
+                        "battery and does not touch results.json or the ledger.")
+    a = p.parse_args()
+    sys.exit(main(lockbox_only=a.lockbox_only))

@@ -1546,6 +1546,26 @@ merit, rather than pre-filtering it out at Phase 2 on the strength of the
 D29 concern alone.
 
 **Phase-3 candidate set is now: S1 (momentum), S2 (TS trend), S5_static
-(carry, static-tilt-labeled).** Still requested, separately: operator
-action to clear the stale `data/lockbox_carry/` + `OPERATOR_TOKEN_CARRY.txt`
-pair so a corrected lockbox rebuild can happen — not yet done.
+(carry, static-tilt-labeled).**
+
+**Lockbox rebuilt.** Operator cleared the stale enc/token pair. Added a
+`--lockbox-only` CLI flag to `run_exp004.py` (reuses the identical
+construction, skips the already-audited confirmatory/diagnostic battery —
+no need to re-spend ~10 minutes re-running canaries that didn't change —
+does not touch `results.json` or the ledger). Rebuilt in 22.7s:
+`data/lockbox_carry/holdout.enc`, 130142 plaintext bytes, sha256
+`7e5e9812f23db3e0db3b0e7110548f2d7d706c5536f7e9cbab9aa8eb49fcfa1d` (differs
+from both the buggy first payload and the never-persisted corrected payload
+from earlier today — expected, since "full history" always includes
+whatever is newly available as of the pull time; the construction is what
+matters, and it is now the corrected one, confirmed by the code path used).
+A fresh operator token was written to `/workspace/OPERATOR_TOKEN_CARRY.txt`
+by `validation.lockbox.build_lockbox` (never printed or logged by design —
+Claude-side tooling has no path to it; the operator retrieves it directly).
+`research/lockbox_access.log`'s own BUILT line records the event
+(auto-appended by `build_lockbox`, not manually written).
+
+Committing the ciphertext (`data/lockbox_carry/holdout.enc`) to git,
+following the exact D21 precedent for the price-panel lockbox (a yfinance
+re-pull is not guaranteed bit-identical, so the committed ciphertext is the
+durable record; the token is the only secret, and it never touches git).
