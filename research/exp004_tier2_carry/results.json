@@ -1,0 +1,249 @@
+{
+  "spec": "specs/EXP-004-tier2-carry-ic-screen-v3.md",
+  "trial_id": "EXP-004-S5_carry",
+  "data_window": [
+    "1999-12-22",
+    "2021-12-29"
+  ],
+  "n_rebalance_dates": 1149,
+  "confirmatory": {
+    "n_dates": 680,
+    "mean_ic": 0.10019368444807972,
+    "std_ic": 0.43708291851805114,
+    "t_nw": 5.7455828648448986,
+    "pct_years_positive": 0.9285714285714286,
+    "years": {
+      "2008": 0.47765115609996495,
+      "2009": 0.1475168136760448,
+      "2010": 0.13250715377895916,
+      "2011": -0.0032833631024874795,
+      "2012": 0.18058497063681161,
+      "2013": 0.07586914026105007,
+      "2014": 0.03509039003062769,
+      "2015": 0.006566726204974959,
+      "2016": 0.17038309242551122,
+      "2017": 0.18095746355244086,
+      "2018": 0.03636911986762193,
+      "2019": 0.15432572546134307,
+      "2020": 0.11930732610413414,
+      "2021": 0.04435759171791915
+    },
+    "passes_graduation": true
+  },
+  "leg_attribution_descriptive": {
+    "treasury_leg": {
+      "n_dates": 716,
+      "mean_ic": 0.05669923097194599,
+      "std_ic": 0.7360806214399869,
+      "t_nw": 2.0868390582974192,
+      "pct_years_positive": 0.7142857142857143
+    },
+    "credit_leg": {
+      "n_dates": 680,
+      "mean_ic": 0.059117647058823525,
+      "std_ic": 0.7097713446533807,
+      "t_nw": 2.203909434913723,
+      "pct_years_positive": 0.8571428571428571
+    }
+  },
+  "static_descriptive": {
+    "n_dates": 628,
+    "mean_ic": 0.08986148899459176,
+    "std_ic": 0.4460733095372753,
+    "t_nw": 4.812351586666504,
+    "pct_years_positive": 0.8461538461538461
+  },
+  "timing_descriptive_not_graded": {
+    "n_dates": 628,
+    "mean_ic": -0.018551833086972357,
+    "std_ic": 0.4357046704784349,
+    "t_nw": -1.0804463999264975,
+    "pct_years_positive": 0.46153846153846156,
+    "passes_graduation": false
+  },
+  "canaries_diagnostic": {
+    "raw": {
+      "all_passed": false,
+      "results": [
+        {
+          "canary": "label_shuffle",
+          "true_t": 5.7455828648448986,
+          "shuffled_t_mean": 0.012557745554813277,
+          "shuffled_t_abs_q95": 1.7210313909359602,
+          "trip_share": 0.02,
+          "passed": true
+        },
+        {
+          "canary": "time_shift",
+          "base_t": 5.7455828648448986,
+          "lagged_t": 5.080766658507987,
+          "shift_rows": 26,
+          "passed": false
+        },
+        {
+          "canary": "random_feature",
+          "t_abs_mean": 0.8812502394338025,
+          "trip_share": 0.02,
+          "passed": true
+        }
+      ]
+    },
+    "timing": {
+      "all_passed": true,
+      "results": [
+        {
+          "canary": "label_shuffle",
+          "true_t": -1.0804463999264975,
+          "shuffled_t_mean": -0.013124210669571137,
+          "shuffled_t_abs_q95": 2.1537080224898855,
+          "trip_share": 0.08,
+          "passed": true
+        },
+        {
+          "canary": "time_shift",
+          "base_t": -1.0804463999264975,
+          "lagged_t": -1.1401432231110158,
+          "shift_rows": 26,
+          "passed": true
+        },
+        {
+          "canary": "random_feature",
+          "t_abs_mean": 0.8812502394338025,
+          "trip_share": 0.02,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "correlation_vs_s1_s2_descriptive": {
+    "S5_raw": {
+      "S5_raw": 1.0,
+      "S5_static": 0.8769,
+      "S5_timing": -0.1112,
+      "S1_raw": 0.1605,
+      "S1_static": 0.5754,
+      "S1_timing": -0.0949,
+      "S2_raw": 0.1636,
+      "S2_static": 0.5846,
+      "S2_timing": -0.0961
+    },
+    "S5_static": {
+      "S5_raw": 0.8769,
+      "S5_static": 1.0,
+      "S5_timing": -0.5751,
+      "S1_raw": 0.0869,
+      "S1_static": 0.5527,
+      "S1_timing": -0.1506,
+      "S2_raw": 0.0843,
+      "S2_static": 0.5557,
+      "S2_timing": -0.153
+    },
+    "S5_timing": {
+      "S5_raw": -0.1112,
+      "S5_static": -0.5751,
+      "S5_timing": 1.0,
+      "S1_raw": 0.0833,
+      "S1_static": -0.1634,
+      "S1_timing": 0.1499,
+      "S2_raw": 0.0908,
+      "S2_static": -0.1539,
+      "S2_timing": 0.1529
+    },
+    "S1_raw": {
+      "S5_raw": 0.1605,
+      "S5_static": 0.0869,
+      "S5_timing": 0.0833,
+      "S1_raw": 1.0,
+      "S1_static": 0.1391,
+      "S1_timing": 0.9074,
+      "S2_raw": 0.8,
+      "S2_static": 0.16,
+      "S2_timing": 0.695
+    },
+    "S1_static": {
+      "S5_raw": 0.5754,
+      "S5_static": 0.5527,
+      "S5_timing": -0.1634,
+      "S1_raw": 0.1391,
+      "S1_static": 1.0,
+      "S1_timing": -0.29,
+      "S2_raw": 0.1219,
+      "S2_static": 0.9985,
+      "S2_timing": -0.3036
+    },
+    "S1_timing": {
+      "S5_raw": -0.0949,
+      "S5_static": -0.1506,
+      "S5_timing": 0.1499,
+      "S1_raw": 0.9074,
+      "S1_static": -0.29,
+      "S1_timing": 1.0,
+      "S2_raw": 0.7096,
+      "S2_static": -0.2692,
+      "S2_timing": 0.8005
+    },
+    "S2_raw": {
+      "S5_raw": 0.1636,
+      "S5_static": 0.0843,
+      "S5_timing": 0.0908,
+      "S1_raw": 0.8,
+      "S1_static": 0.1219,
+      "S1_timing": 0.7096,
+      "S2_raw": 1.0,
+      "S2_static": 0.141,
+      "S2_timing": 0.9084
+    },
+    "S2_static": {
+      "S5_raw": 0.5846,
+      "S5_static": 0.5557,
+      "S5_timing": -0.1539,
+      "S1_raw": 0.16,
+      "S1_static": 0.9985,
+      "S1_timing": -0.2692,
+      "S2_raw": 0.141,
+      "S2_static": 1.0,
+      "S2_timing": -0.2858
+    },
+    "S2_timing": {
+      "S5_raw": -0.0961,
+      "S5_static": -0.153,
+      "S5_timing": 0.1529,
+      "S1_raw": 0.695,
+      "S1_static": -0.3036,
+      "S1_timing": 0.8005,
+      "S2_raw": 0.9084,
+      "S2_static": -0.2858,
+      "S2_timing": 1.0
+    }
+  },
+  "credit_leg_data_sanity_descriptive": {
+    "LQD": {
+      "ttm_yield_min": 2.2904440480042214,
+      "ttm_yield_max": 8.234609106156817,
+      "any_negative": false,
+      "exdate_coverage_min": 1.0,
+      "exdate_coverage_max": 14.0
+    },
+    "HYG": {
+      "ttm_yield_min": 4.017457232411055,
+      "ttm_yield_max": 12.948011930319597,
+      "any_negative": false,
+      "exdate_coverage_min": 1.0,
+      "exdate_coverage_max": 13.0
+    },
+    "JNK": {
+      "ttm_yield_min": 4.263744503308764,
+      "ttm_yield_max": 17.18680452236259,
+      "any_negative": false,
+      "exdate_coverage_min": 1.0,
+      "exdate_coverage_max": 14.0
+    },
+    "EMB": {
+      "ttm_yield_min": 3.2514597534447476,
+      "ttm_yield_max": 7.282471346477442,
+      "any_negative": false,
+      "exdate_coverage_min": 1.0,
+      "exdate_coverage_max": 13.0
+    }
+  }
+}

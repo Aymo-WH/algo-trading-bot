@@ -1,0 +1,122 @@
+[
+  {
+    "variant": 0,
+    "seed": 101,
+    "lookback": 20,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": false,
+      "max_drawdown": true,
+      "years_positive": false,
+      "survives_10bps": false,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": -0.682075759544261,
+    "net_sharpe_10bps": -1.2514463706698231,
+    "pbo": null,
+    "dsr": 0.03603597063454069,
+    "canaries_all_passed": true
+  },
+  {
+    "variant": 1,
+    "seed": 101,
+    "lookback": 60,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": false,
+      "max_drawdown": true,
+      "years_positive": true,
+      "survives_10bps": false,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": 0.1806501144979723,
+    "net_sharpe_10bps": -0.13331669897664014,
+    "pbo": null,
+    "dsr": 0.5810118433603472,
+    "canaries_all_passed": true
+  },
+  {
+    "variant": 2,
+    "seed": 101,
+    "lookback": 120,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": false,
+      "max_drawdown": true,
+      "years_positive": true,
+      "survives_10bps": false,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": 0.39411161386265886,
+    "net_sharpe_10bps": 0.18174617236819118,
+    "pbo": null,
+    "dsr": 0.6412736582568723,
+    "canaries_all_passed": true
+  },
+  {
+    "variant": 3,
+    "seed": 101,
+    "lookback": 250,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": true,
+      "max_drawdown": true,
+      "years_positive": true,
+      "survives_10bps": true,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": 0.722603735839425,
+    "net_sharpe_10bps": 0.5816508329669018,
+    "pbo": null,
+    "dsr": 0.7943472032681487,
+    "canaries_all_passed": true
+  },
+  {
+    "variant": 4,
+    "seed": 202,
+    "lookback": 60,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": false,
+      "max_drawdown": true,
+      "years_positive": false,
+      "survives_10bps": false,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": -0.5086407577004324,
+    "net_sharpe_10bps": -0.85727909766107,
+    "pbo": null,
+    "dsr": 0.001676979274560474,
+    "canaries_all_passed": true
+  },
+  {
+    "variant": 5,
+    "seed": 202,
+    "lookback": 120,
+    "all_gates_passed": false,
+    "gates": {
+      "net_sharpe": false,
+      "max_drawdown": true,
+      "years_positive": false,
+      "survives_10bps": false,
+      "pbo": false,
+      "dsr": false,
+      "canaries": true
+    },
+    "net_sharpe_5bps": -0.6213897798155247,
+    "net_sharpe_10bps": -0.8761783455435881,
+    "pbo": null,
+    "dsr": 0.00026642272106290794,
+    "canaries_all_passed": true
+  }
+]

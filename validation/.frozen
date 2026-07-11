@@ -1,0 +1,5 @@
+Referee frozen 2026-07-08 after the pre-registered self-test went green
+(53/53; specs/REFEREE-SELFTEST-2026-07-08.md + -v2.md; commit 82024e2).
+Per mission §8 ("don't shave the ruler") and the quarantine guard, changes to
+validation/ now require the OPERATOR to remove this marker themselves after a
+logged approval. Claude must never delete or bypass it.
