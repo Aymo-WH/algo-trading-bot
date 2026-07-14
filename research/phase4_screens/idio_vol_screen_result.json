@@ -1,0 +1,137 @@
+{
+  "screen": "EXPLORATORY ONLY -- non-trial-counted, hypothesis-generating, not a validated result (mission Sec8, D57 bounded coda option B)",
+  "candidate": "dispersion / idiosyncratic volatility (-idio_vol, low-vol anomaly sign)",
+  "prior_note": "LOW prior: S3/low-beta wrong-signed t=-3.06 (D23) => defensive axis has NEGATIVE IC on this sample; idio-vol is on the same axis. Ledger-closing obligation (mission signal list, no prior disposition, D51).",
+  "construction_summary": {
+    "idio_vol": "residual std vs eligible EW market, trailing 252d, closed-form var(r)-cov^2/var(m); signal = -idio_vol, per-date XS z-score",
+    "vol_window": 252
+  },
+  "data_window": [
+    "1999-12-22",
+    "2021-12-29"
+  ],
+  "n_rebalance_dates": 1149,
+  "raw_ic_exploratory": {
+    "n_dates": 1148,
+    "mean_ic": -0.01888797093525934,
+    "std_ic": 0.2666142383861229,
+    "t_nw": -2.5191459101135867,
+    "pct_years_positive": 0.43478260869565216
+  },
+  "raw_ic_canary_warning": "RAW block FAILS the time_shift canary (base t=-2.52, lagged t~=-2.47, retains ~98% of |t| after a ~6mo lag) -- the raw wrong-signed IC is a STALE STATIC TILT, not timed information, exactly the S3 defensive-axis artifact (S3 fails the same canary: base -3.06, lagged -2.88). Do NOT read this |t|>2 as a real timed loading. See canaries block.",
+  "residual_ic_headline_exploratory": {
+    "n_dates": 1096,
+    "mean_ic": -0.014615376014678945,
+    "std_ic": 0.22324415037126372,
+    "t_nw": -2.300479965235847,
+    "pct_years_positive": 0.36363636363636365
+  },
+  "residual_ic_also_out_s3_exploratory": {
+    "n_dates": 1096,
+    "mean_ic": 0.0024474212174510467,
+    "std_ic": 0.18610520129912286,
+    "t_nw": 0.4261976911908401,
+    "pct_years_positive": 0.5909090909090909
+  },
+  "canaries": {
+    "raw_signal": {
+      "all_passed": false,
+      "results": [
+        {
+          "canary": "label_shuffle",
+          "true_t": -2.5191459101135867,
+          "shuffled_t_mean": 0.03486854108656542,
+          "shuffled_t_abs_q95": 1.889470046324272,
+          "trip_share": 0.04,
+          "passed": true
+        },
+        {
+          "canary": "time_shift",
+          "base_t": -2.5191459101135867,
+          "lagged_t": -2.4710327385746185,
+          "shift_rows": 26,
+          "passed": false
+        },
+        {
+          "canary": "random_feature",
+          "t_abs_mean": 0.8812502394338025,
+          "trip_share": 0.02,
+          "passed": true
+        }
+      ]
+    },
+    "residual_out_composite_statics_PRIMARY": {
+      "all_passed": true,
+      "results": [
+        {
+          "canary": "label_shuffle",
+          "true_t": -2.300479965235847,
+          "shuffled_t_mean": -0.0022406431144024307,
+          "shuffled_t_abs_q95": 1.7835746009793505,
+          "trip_share": 0.04,
+          "passed": true
+        },
+        {
+          "canary": "time_shift",
+          "base_t": -2.300479965235847,
+          "lagged_t": -1.470171143334544,
+          "shift_rows": 26,
+          "passed": true
+        },
+        {
+          "canary": "random_feature",
+          "t_abs_mean": 0.8812502394338025,
+          "trip_share": 0.02,
+          "passed": true
+        }
+      ]
+    },
+    "residual_also_out_s3_supplementary": {
+      "all_passed": true,
+      "results": [
+        {
+          "canary": "label_shuffle",
+          "true_t": 0.4261976911908401,
+          "shuffled_t_mean": -0.05315798515359153,
+          "shuffled_t_abs_q95": 1.7531473011876917,
+          "trip_share": 0.03,
+          "passed": true
+        },
+        {
+          "canary": "time_shift",
+          "base_t": 0.4261976911908401,
+          "lagged_t": 0.8907081314653547,
+          "shift_rows": 26,
+          "passed": true
+        },
+        {
+          "canary": "random_feature",
+          "t_abs_mean": 0.8812502394338025,
+          "trip_share": 0.02,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "pooled_correlations_descriptive": {
+    "iv_vs_raw_composite": 0.048489492481072954,
+    "iv_vs_s1_static": 0.01676643395530143,
+    "iv_vs_s2_static": 0.024782370664644802,
+    "iv_vs_s3_low_beta": 0.3679213603788596
+  },
+  "turnover_descriptive": {
+    "ann_turnover": 2.8691096604728377,
+    "gross_sharpe_descriptive_only": 0.019202169122328347,
+    "gross_max_drawdown_descriptive_only": -0.6925223700215628,
+    "comparator_ledger_m0_2sig_ann_turnover": 22.92
+  },
+  "s5_static_omission_disclosed": "S5_static (carry) NOT in the decomposition regressors -- no cached raw carry panel locally, same disclosed limitation as the D54 screen. Regressed out raw S1+S2 composite + S1_static + S2_static (+ S3 in the 2b variant) only.",
+  "comparator_context": {
+    "S1_mean_ic": 0.038,
+    "S1_t_nw": 3.92,
+    "S2_mean_ic": 0.031,
+    "S2_t_nw": 3.16,
+    "S3_t_nw_wrong_signed": -3.06,
+    "note": "EXP-001/D23 numbers, for scale only -- NOT a graduation comparison, informal screening only"
+  }
+}
